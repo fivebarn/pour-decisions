@@ -35,3 +35,7 @@ It then opens full screen like a regular app and works offline.
 ## Feedback
 
 Found a bug or have an idea? Use **Send feedback** in the app's menu, or email **fivebarnstudio@gmail.com**.
+
+## Credits
+
+Barcode reading uses [ZXing for JavaScript](https://github.com/zxing-js/library) (Apache License 2.0, see [`vendor/ZXING-LICENSE`](vendor/ZXING-LICENSE)).
