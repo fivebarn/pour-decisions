@@ -1,0 +1,1577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pour Decisions</title>
+<meta name="description" content="A personal wine inventory: what you have, where it sits in your fridge, and what you've opened.">
+<meta name="theme-color" content="#5a1630">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Pour Decisions">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<style>
+/* Layout: single 900px mobile-first column; header → toolbar → rows → sections. Tokens from spec §07. */
+:root{
+  --bg:#fbf7f8;--surface:#ffffff;--muted:#f4ecee;--text:#20191c;--dim:#74666c;--border:#dfd2d6;
+  --accent:#5a1630;--strong:#431022;--accent-soft:#ecdde2;--copper:#b5683a;--danger:#a43043;--green:#52624e;
+  --scan:#b3263e;--add:#2f7545;--on-fill:#ffffff;--shadow:0 6px 22px rgba(40,10,20,.12);--overlay:rgba(20,8,12,.48);--overlay-strong:rgba(10,4,6,.72);
+  --serif:Georgia,"Times New Roman",Times,serif;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171214;--surface:#231b1e;--muted:#2e2427;--text:#f8eef1;--dim:#b4a2a9;--border:#3e3135;
+  --accent:#d693a8;--strong:#efbccb;--accent-soft:#3b2530;--copper:#d68e60;--danger:#ef8898;--green:#9aad94;
+  --on-fill:#ffffff;--shadow:0 8px 26px rgba(0,0,0,.45);color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#171214;--surface:#231b1e;--muted:#2e2427;--text:#f8eef1;--dim:#b4a2a9;--border:#3e3135;
+  --accent:#d693a8;--strong:#efbccb;--accent-soft:#3b2530;--copper:#d68e60;--danger:#ef8898;--green:#9aad94;
+  --on-fill:#ffffff;--shadow:0 8px 26px rgba(0,0,0,.45);color-scheme:dark}
+/* accent-filled controls need dark text in dark mode since accent is light pink there */
+:root{--on-accent:#ffffff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--on-accent:#2a0f19}}
+:root[data-theme="dark"]{--on-accent:#2a0f19}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.4 var(--sans)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+button:disabled{cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+main{max-width:900px;margin:0 auto;padding:24px 18px calc(100px + env(safe-area-inset-bottom,0px))}
+@media (max-width:390px){main{padding-left:14px;padding-right:14px}}
+@media (min-width:720px){main{padding-top:42px}}
+.label{color:var(--copper);font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.11em}
+.dim{color:var(--dim)}
+.banner{font-size:12px;color:var(--dim);background:var(--muted);border-radius:10px;padding:8px 12px;margin-bottom:12px}
+
+/* Header */
+.hdr{display:flex;align-items:center;gap:10px;padding-top:6px;position:relative}
+@media (max-width:390px){.hdr{gap:8px}}
+.circ{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;flex:none}
+.circ:active{transform:translateY(1px)}
+.menu-btn{border:1px solid var(--border);background:var(--surface);color:var(--strong)}
+.scan-btn{background:var(--scan);color:#fff;box-shadow:0 3px 10px rgba(179,38,62,.35)}
+.add-btn{background:var(--add);color:#fff;box-shadow:0 3px 10px rgba(47,117,69,.35)}
+.total{flex:1;min-width:0;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.total b{font-size:14px;color:var(--strong);font-weight:750}
+.total .sep{color:var(--border);margin:0 4px}
+@media (max-width:390px){.total{font-size:10px}.total b{font-size:12px}}
+.dd{position:absolute;top:50px;left:0;z-index:20;width:min(240px,calc(100vw - 36px));padding:6px;border-radius:12px;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column}
+.dd button{min-height:42px;border-radius:8px;padding:0 12px;text-align:left;font-size:14px;font-weight:700;display:flex;align-items:center;gap:9px}
+.dd button:hover,.dd button:focus-visible{background:var(--muted)}
+.dd .red{color:var(--danger)}.dd .grn{color:var(--add)}
+:root[data-theme="dark"] .dd .grn{color:var(--green)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dd .grn{color:var(--green)}}
+.dd .ddlink{min-height:42px;border-radius:8px;padding:0 12px;font-size:14px;font-weight:700;display:flex;align-items:center;color:var(--text);text-decoration:none}
+.dd .ddlink:hover{background:var(--muted)}
+.dd .divider{border-bottom:1px solid var(--border);border-radius:8px 8px 0 0;margin-bottom:4px}
+
+/* Toolbar */
+.toolbar{margin-top:16px;display:grid;gap:10px}
+@media (min-width:720px){.toolbar{grid-template-columns:1fr auto;align-items:center}.toolbar .span{grid-column:1/-1}}
+.search{min-height:48px;border-radius:12px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;gap:10px;padding:0 13px;color:var(--dim)}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search input{flex:1;min-width:0;border:0;background:none;outline:0;font-size:15px;color:var(--text)}
+.search .clr{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;color:var(--dim)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:719px){.controls{justify-content:flex-start}}
+@media (min-width:720px){.controls{flex-wrap:nowrap}}
+.pill{min-height:36px;border-radius:999px;border:1px solid var(--border);background:var(--surface);display:inline-flex;align-items:center;gap:6px;padding:0 12px;color:var(--dim)}
+.pill .t{font-size:13px;font-weight:740}
+.pill .badge{min-width:19px;height:19px;border-radius:999px;background:var(--accent);color:var(--on-accent);font-size:10px;font-weight:760;display:grid;place-items:center;padding:0 5px}
+.pill .chev{transition:transform .18s}
+.pill[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.pill.on{border-color:color-mix(in srgb,var(--accent) 50%,transparent);background:var(--accent-soft);color:var(--strong)}
+.sort{padding-right:0;position:relative}
+.sort .t{font-size:11px;font-weight:760}
+.sort select{appearance:none;-webkit-appearance:none;border:0;background:transparent;width:170px;font-size:12px;font-weight:700;color:var(--text);padding:0 26px 0 2px;min-height:34px;cursor:pointer}
+.sort .chev{position:absolute;right:8px;pointer-events:none}
+.panel{padding:16px;border-radius:12px;border:1px solid var(--border);background:var(--surface);box-shadow:var(--shadow);margin-top:2px;display:grid;gap:16px}
+.panel-top{display:flex;justify-content:space-between;align-items:center}
+.grp h3{margin:0 0 8px;font:700 16px var(--serif);display:flex;align-items:baseline;gap:8px}
+.grp h3 small{font:400 11px var(--sans);color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:34px;border-radius:999px;border:1px solid var(--border);padding:6px 11px;font-size:12px;font-weight:680;background:var(--surface)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.chip .c{opacity:.65;margin-left:4px;font-weight:600}
+.textbtn{font-size:12px;color:var(--accent);font-weight:700;min-height:36px}
+.count{font-size:11px;color:var(--dim)}
+
+/* Rows */
+.list{margin-top:10px}
+.row{min-height:76px;display:flex;gap:10px;align-items:center;border-bottom:1px solid var(--border)}
+@media (min-width:720px){.row{padding-inline:8px}}
+.row.out{opacity:.6}
+.row-main{flex:1;min-width:0;display:flex;gap:12px;align-items:center;text-align:left;padding:10px 0;border-radius:10px}
+.disc{width:46px;height:46px;border-radius:50%;background:var(--muted);color:var(--strong);display:grid;place-items:center;font:650 15px var(--serif);flex:none}
+@media (max-width:390px){.disc{width:42px;height:42px;font-size:12px}}
+.rinfo{min-width:0;flex:1;display:grid;gap:2px}
+.name{font:650 17px var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+@media (max-width:390px){.name{font-size:16px}}
+.sum{display:flex;gap:3px 6px;align-items:center;min-width:0;flex-wrap:wrap}
+.sum .v{flex:0 1 auto}
+.titleline{display:flex;align-items:baseline;gap:8px;min-width:0}
+.titleline .name{flex:0 0 auto;max-width:65%;font-size:16px}
+.titleline .v{flex:0 1 auto;min-width:0;font-size:12px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta{display:flex;flex-wrap:wrap;gap:4px 5px;align-items:center;margin-top:2px}
+.meta .shelfchip{line-height:1.5;color:var(--dim);background:var(--muted);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.meta .tag{font-size:10px;line-height:1.6;padding:1px 7px;font-weight:650}
+.chipgrp{display:inline-flex;gap:6px;align-items:center;flex:none}
+.sum .shelfchip{line-height:1.5;color:var(--dim);background:var(--muted);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
+.price{border-radius:999px;padding:1px 8px;font-size:11px;font-weight:760;line-height:1.5;flex:none}
+.price.p1{background:color-mix(in srgb,var(--accent) 10%,var(--surface));color:var(--strong);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 22%,transparent)}
+.price.p2{background:color-mix(in srgb,var(--accent) 30%,var(--surface));color:var(--strong)}
+.price.p3{background:var(--accent);color:var(--on-accent)}
+.sum .v{font-size:12px;font-weight:600;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.loc{font-size:11px;color:var(--dim);display:flex;gap:6px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden}
+.binchip{color:var(--copper);background:color-mix(in srgb,var(--copper) 12%,transparent);font-size:10px;font-weight:760;border-radius:5px;padding:1px 5px;flex:none}
+.notes{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+.tag{background:var(--accent-soft);color:var(--strong);font-size:9px;font-weight:740;padding:2px 6px;border-radius:999px}
+.step{height:36px;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;overflow:hidden;flex:none}
+.step button{width:33px;height:100%;display:grid;place-items:center;color:var(--accent)}
+.step button:disabled{opacity:.35}
+.step .n{min-width:25px;text-align:center;font-size:13px;font-weight:700}
+.shimmer{height:88px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,var(--muted) 0,var(--surface) 50%,var(--muted) 100%);background-size:200% 100%;animation:sh 1.4s linear infinite;border-radius:8px;margin-bottom:6px}
+@keyframes sh{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.shimmer{animation:none}*{transition:none!important}}
+.empty{text-align:center;padding:48px 16px;display:grid;gap:8px;justify-items:center;color:var(--dim)}
+.empty h2{font:600 22px var(--serif);color:var(--text);margin:0}
+.btn{min-height:42px;border-radius:9px;padding:0 14px;font-size:13px;font-weight:760;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn.pri{background:var(--accent);color:var(--on-accent)}
+.btn.sec{margin-top:0;padding:0 14px;border:1px solid var(--border);background:var(--surface)}
+.btn:disabled{opacity:.45}
+
+/* Sections */
+.sec{margin-top:42px;padding-top:22px;border-top:2px solid color-mix(in srgb,var(--accent) 22%,transparent)}
+.sec-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sec-h h2{font:400 23px var(--serif);margin:0}
+.top{min-height:36px;font-size:12px;color:var(--accent);font-weight:700}
+.act{min-height:55px;display:grid;grid-template-columns:32px 1fr auto;gap:10px;align-items:center;border-bottom:1px solid var(--border)}
+.mark{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:18px;line-height:1;font-weight:600}
+.mark.add{background:var(--accent-soft);color:var(--strong)}
+.mark.drank{background:color-mix(in srgb,var(--green) 16%,transparent);color:var(--green)}
+.act .nm{font:15px var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act .br{font-size:11px;color:var(--dim)}
+.act .rt{text-align:right;font-size:12px;color:var(--dim)}
+.act .rt small{display:block;font-size:10px}
+.more{min-height:36px;font-size:12px;color:var(--accent);font-weight:700;display:inline-flex;align-items:center;gap:4px;margin-top:4px}
+.more .chev{transition:transform .18s}.more.open .chev{transform:rotate(180deg)}
+.tabs{display:inline-flex;padding:3px;border:1px solid var(--border);background:var(--surface);border-radius:999px}
+.tabs button{min-height:32px;padding:0 12px;font-size:12px;font-weight:740;color:var(--dim);border-radius:999px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--on-accent)}
+.tt-h,.tt-r,.tt-t{display:grid;grid-template-columns:1fr 64px;align-items:center;padding:0 10px}
+.tt-h{height:36px;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.tt-h span:last-child,.tt-r span:last-child,.tt-t span:last-child{text-align:right}
+.tt-r{min-height:44px;position:relative;border-bottom:1px solid var(--border)}
+.tt-r .bar{position:absolute;left:0;top:6px;bottom:6px;background:color-mix(in srgb,var(--accent) 9%,transparent);border-radius:0 5px 5px 0}
+.tt-r .k{position:relative;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt-r .c{position:relative;font:16px var(--serif)}
+.tt-t{height:46px;font-size:13px;font-weight:700}
+.tt-t span:last-child{font:18px var(--serif);color:var(--strong)}
+.exp-copy{font-size:14px;color:var(--dim);margin:0 0 14px;max-width:62ch}
+.exp-cards{display:grid;gap:10px}
+@media (min-width:720px){.exp-cards{grid-template-columns:1fr 1fr}}
+.card-btn{min-height:62px;border-radius:11px;padding:9px 12px;display:flex;align-items:center;gap:10px;text-align:left}
+.card-btn.pri{background:var(--accent);color:var(--on-accent)}
+.card-btn.sec2{border:1px solid var(--border);background:var(--surface)}
+.card-btn.sec2 svg{color:var(--add)}
+.card-btn b{display:block;font-size:14px}
+.card-btn small{font-size:12px;opacity:.82}
+.card-btn:disabled{opacity:.45}
+.status{font-size:12px;color:var(--dim);margin-top:8px;min-height:17px}
+.import{margin-top:6px;font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.audit-entry{margin-top:24px;width:100%;min-height:58px;border-radius:12px;border:1px solid var(--border);background:var(--surface);padding:9px 12px;display:grid;grid-template-columns:38px 1fr auto;gap:11px;align-items:center;text-align:left}
+.audit-entry:active{background:var(--muted)}
+.ico-soft{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--strong);display:grid;place-items:center}
+.audit-entry b{display:block;font-size:14px}.audit-entry small{font-size:12px;color:var(--dim)}
+.audit-entry .open{font-size:12px;font-weight:760;color:var(--accent)}
+
+/* Fridge */
+.fridge{margin-top:14px;border:1px solid var(--border);border-radius:16px;background:var(--surface);overflow:hidden}
+.fr-h{width:100%;display:flex;align-items:center;gap:10px;padding:12px 14px;text-align:left;min-height:52px}
+.fr-h .t{font:400 18px var(--serif);flex:none}
+.fr-h .s{flex:1;min-width:0;font-size:12px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr-h .chev{transition:transform .18s;color:var(--dim)}.fr-h[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.fr-body{padding-top:10px;display:grid;gap:6px}
+.fr-sum{margin:10px 0 0;font-size:12px;color:var(--dim)}
+.shelf{width:100%;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;text-align:left;padding:8px 10px;border-radius:10px;background:var(--muted);border:1px solid transparent;min-height:56px}
+.shelf[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.shelf .no{width:30px;height:30px;border-radius:50%;background:var(--surface);color:var(--strong);display:grid;place-items:center;font:650 15px var(--serif)}
+.shelf .mid{min-width:0;display:grid;gap:5px}
+.shelf .br{font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shelf .br.empty{color:var(--dim);font-weight:500}
+.fill{height:5px;border-radius:999px;background:var(--surface);overflow:hidden;display:flex}
+.fill i{display:block;height:100%;background:var(--accent)}
+.fill i.sh{background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 6px);opacity:.75}
+.fill i.over{background:var(--danger)}
+.shelf .rt{text-align:right;font-size:12px;font-weight:700;white-space:nowrap}
+.shelf .rt small{display:block;font-size:11px;font-weight:500;color:var(--dim)}
+.shelf .rt small.bad{color:var(--danger)}
+.fr-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:4px 4px 0;font-size:12px;color:var(--dim)}
+.fr-foot .legend{display:inline-flex;align-items:center;gap:6px}
+.fr-foot .sw{width:16px;height:6px;border-radius:3px;background:repeating-linear-gradient(135deg,var(--accent) 0 3px,transparent 3px 6px)}
+.shelfchip{color:var(--copper);background:color-mix(in srgb,var(--copper) 12%,transparent);font-size:10px;font-weight:760;border-radius:5px;padding:1px 6px;flex:none}
+.shelfpick{display:flex;gap:6px;flex-wrap:wrap}
+.sp.outbtn{width:auto;padding:0 11px;font:700 12px var(--sans)}
+.pendchip{color:var(--strong);background:var(--accent-soft);border:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);font-size:10px;font-weight:760;border-radius:5px;padding:0 6px;flex:none}
+.recv{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-4px 0 10px 0;font-size:11px;padding:7px 10px;border:1px dashed color-mix(in srgb,var(--accent) 45%,transparent);border-radius:10px;color:var(--dim)}
+@media (min-width:560px){.recv{margin-left:58px;font-size:12px}}
+.rowwrap{border-bottom:1px solid var(--border)}
+.rowwrap .row{border-bottom:0}
+.recvbtn{flex:none;min-height:28px;border-radius:999px;padding:0 12px;background:var(--accent);color:var(--on-accent);font-size:12px;font-weight:750;display:inline-flex;align-items:center;gap:5px}
+.recvbtn:disabled{opacity:.45}
+.pendbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;border-radius:10px;background:var(--accent-soft);color:var(--strong);font-size:12px}
+.pendbar b{font-weight:760}
+.pendfs{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px;border:1px dashed var(--border);border-radius:10px}
+.pendfs legend{padding:0 4px}
+.sp{width:40px;height:38px;border-radius:9px;border:1px solid var(--border);background:var(--surface);font:650 15px var(--serif);color:var(--text)}
+.sp[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.sp:disabled{opacity:.5}
+.su-row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:50px;border-bottom:1px solid var(--border)}
+.su-row span{font-size:14px;font-weight:650}
+.su-row small{display:block;font-size:11px;font-weight:500;color:var(--dim)}
+.su-main{border-bottom:0;padding:4px 0 10px}
+.su-head{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.su-step{width:132px;flex:none}
+.su-step .su-val{flex:1;display:grid;place-items:center;font-size:15px;font-weight:700}
+.arr-row{display:grid;grid-template-columns:1fr;gap:8px;padding:10px 0;border-bottom:1px solid var(--border)}
+@media (min-width:560px){.arr-row{grid-template-columns:1fr auto;align-items:center}}
+.arr-row .nm{font:600 15px var(--serif)}.arr-row .sub{font-size:12px;color:var(--dim)}
+.arr-row .sp{width:36px;height:34px;font-size:14px}
+.arr-tabs{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+
+/* Audit */
+.back{min-height:36px;color:var(--accent);font-size:14px;font-weight:750}
+.a-intro{display:grid;gap:8px;margin-top:14px}
+.a-intro .ico-soft{width:48px;height:48px}
+.a-intro h1,.a-head h1{font:400 22px var(--serif);margin:0}
+.a-intro p{font-size:14px;color:var(--dim);margin:0;max-width:60ch}
+.startbtn{min-height:44px;border-radius:10px;padding:0 18px;background:var(--accent);color:var(--on-accent);font-size:14px;font-weight:760;justify-self:start;margin-top:8px}
+.startbtn:disabled{opacity:.45}
+.hist{margin-top:40px;border-top:1px solid var(--border);padding-top:14px}
+.hrow{min-height:62px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.hrow b{font-size:14px;font-weight:650;display:block}.hrow small{font-size:12px;color:var(--dim)}
+.hrow .r{text-align:right}
+.a-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-top:14px}
+.a-head .prog{text-align:right}
+.a-head .prog b{font:16px var(--serif);color:var(--strong);display:block}
+.pbar{height:5px;border-radius:999px;background:var(--muted);margin-top:13px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent);transition:width .18s}
+.instr{font-size:14px;color:var(--dim);margin:12px 0}
+.found{width:100%;min-height:48px;border-radius:10px;border:1px solid var(--border);background:var(--surface);padding:7px 11px;display:flex;gap:10px;align-items:center;text-align:left}
+.found svg{color:var(--add);flex:none}
+.found b{display:block;font-size:14px}.found small{font-size:12px;color:var(--dim)}
+.a-tools{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.arow{min-height:82px;display:grid;grid-template-columns:1fr auto;gap:10px;padding:9px 6px;border-bottom:1px solid var(--border);align-items:center}
+.arow.ok{background:color-mix(in srgb,var(--green) 5%,transparent)}
+.arow.diff{background:color-mix(in srgb,var(--danger) 5%,transparent)}
+.aid{display:flex;gap:10px;min-width:0}
+.aid .disc{width:42px;height:42px;font-size:14px}
+.aid .name{font-size:16px}
+.aid .v{font-size:12px;color:var(--dim)}
+.aid .lc{font-size:12px;color:var(--copper)}
+.aid .nt{font-size:12px;max-width:42ch;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
+.aid .ex{font-size:12px;color:var(--dim)}
+.acts{display:grid;gap:6px;justify-items:end}
+.mpill{min-height:32px;border-radius:999px;padding:0 11px;font-size:12px;font-weight:750;display:inline-flex;gap:4px;align-items:center;background:var(--accent);color:var(--on-accent)}
+.zpill{min-height:32px;border-radius:999px;padding:0 11px;font-size:12px;font-weight:750;border:1px solid var(--border);background:var(--surface);color:var(--dim)}
+.step.sm{height:34px;border-radius:9px}.step.sm button{width:31px}
+.astat{font-size:10px;font-weight:760}
+.astat.ok{color:var(--green)}.astat.bad{color:var(--danger)}
+.review{margin-top:24px;padding:18px;border-radius:12px;border:1px solid var(--border);background:var(--surface)}
+.rv-h{display:flex;justify-content:space-between;gap:10px;align-items:flex-end}
+.rv-h h2{font:400 16px var(--serif);margin:4px 0 0}
+.vrow{min-height:48px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
+.vrow b{font-size:12px;font-weight:720}.vrow small{font-size:11px;color:var(--dim);display:block}
+.vrow .d{color:var(--danger);font-size:12px;font-weight:700;white-space:nowrap}
+.rv-a{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}
+.rv-a button{min-height:40px;border-radius:9px;padding:0 13px;font-size:12px;font-weight:760}
+.err{color:var(--danger);font-size:13px;margin-top:8px}
+.discard{display:block;margin:18px auto 0;font-size:12px;color:var(--danger);font-weight:700;min-height:34px;padding:0 10px;border:1px solid transparent;border-radius:8px}
+.discard.armed{border-color:var(--danger)}
+
+/* Sheets */
+.bd{position:fixed;inset:0;z-index:50;background:var(--overlay);display:flex;align-items:flex-end;justify-content:center;padding-top:40px}
+.bd.scan{z-index:80;background:var(--overlay-strong)}
+@media (min-width:720px){.bd{align-items:center;padding:32px}}
+.sheet{width:100%;max-width:620px;max-height:calc(100% - 12px);overflow:auto;background:var(--surface);border-radius:20px 20px 0 0;padding:15px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:var(--shadow)}
+.bd.scan .sheet{max-width:560px;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}
+@media (min-width:720px){.sheet{border-radius:18px;max-height:min(90%,760px);padding:18px 22px 20px}.bd.scan .sheet{border-radius:18px}}
+.sh-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
+.sh-h h2{font:400 20px var(--serif);margin:0}
+.sh-h p{margin:2px 0 0;font-size:12px;color:var(--dim)}
+.close{width:34px;height:34px;border-radius:50%;background:var(--muted);display:grid;place-items:center;flex:none}
+.form{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px}
+.form .c6{grid-column:span 6}.form .c5{grid-column:span 5}.form .c2{grid-column:span 2}
+.form .c2 .in{padding-left:6px;padding-right:6px;text-align:center}
+.ac-right .ac{left:auto;right:0}
+.form .ac{min-width:190px}
+.ac-years{min-width:120px!important;max-height:none!important}
+.ac-years button{min-height:42px}
+.ac-years b{font-size:15px}
+.form .full{grid-column:1/-1}
+.fld{display:grid;gap:4px;min-width:0;position:relative}
+.fld>label,.fld>.lb,fieldset legend{font-size:11px;font-weight:750;color:var(--dim)}
+.req{color:var(--danger)}
+.in{min-height:38px;border-radius:8px;border:1px solid var(--border);padding:8px 10px;font-size:14px;font-weight:500;background:var(--surface);width:100%;min-width:0}
+.in:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+textarea.in{min-height:58px;resize:vertical}
+.qstep{height:38px;border:1px solid var(--border);border-radius:8px;display:flex;overflow:hidden}
+.qstep button{width:38px;color:var(--accent);display:grid;place-items:center}
+.qstep button:disabled{opacity:.35}
+.qstep input{flex:1;min-width:36px;text-align:center;border:0;background:none;font-size:14px;font-weight:650;outline:0}
+.ac{position:absolute;left:0;right:0;top:100%;z-index:5;margin-top:4px;max-height:154px;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow)}
+.ac button{display:block;width:100%;min-height:38px;text-align:left;padding:5px 10px}
+.ac button:hover,.ac button.hl{background:var(--muted)}
+.ac b{display:block;font-size:13px;font-weight:650}.ac small{font-size:10px;color:var(--dim)}
+.quick{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.qchip{min-height:27px;border-radius:999px;border:1px solid var(--border);padding:0 9px;font-size:11px;font-weight:650}
+.qchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.bcrow{display:flex;gap:8px}
+.gbtn{min-width:88px;border-radius:8px;padding:0 12px;background:var(--add);color:#fff;font-size:14px;font-weight:760;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px}
+.gbtn:disabled{opacity:.42}
+.note{font-size:12px;margin-top:2px}
+.note.ok{color:var(--green)}.note.bad{color:var(--danger)}
+fieldset{border:0;padding:0;margin:0;min-width:0}
+.tagchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+.tagchips .qchip{min-height:28px}
+.tagadd{display:flex;gap:8px;align-items:center}
+.tagadd .in{height:40px;flex:1}
+.foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
+.foot .r{display:flex;gap:8px;margin-left:auto}
+.save{min-height:42px;border-radius:9px;padding:0 14px;background:var(--accent);color:var(--on-accent);font-size:13px;font-weight:760}
+.save:disabled{opacity:.45}
+.rm{font-size:13px;color:var(--danger);font-weight:700;min-height:36px;padding:0 10px;border-radius:8px;border:1px solid transparent}
+.rm.armed{border-color:var(--danger)}
+
+/* Scanner */
+.cam{position:relative;min-height:220px;border-radius:12px;background:#0d0a0b;overflow:hidden;display:grid;place-items:center}
+.cam video{width:100%;height:min(46vh,340px);object-fit:cover;display:block}
+.guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(82%,400px);height:104px;border:2px solid rgba(255,255,255,.92);border-radius:9px;box-shadow:0 0 0 999px rgba(0,0,0,.42)}
+.laser{position:absolute;left:6px;right:6px;top:50%;height:2px;background:#ff3b4f;box-shadow:0 0 8px #ff3b4f}
+.cam .cap{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-size:12px;font-weight:700}
+.cam .fallback{color:#f1e6e9;font-size:13px;padding:18px;text-align:center;display:grid;gap:12px;justify-items:center;max-width:36ch}
+.photo-btn{min-height:42px;border-radius:9px;padding:0 14px;background:#fff;color:#2a0f19;font-weight:760;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.manual{margin-top:14px;display:grid;gap:6px}
+.manual label{font-size:12px;font-weight:750}
+.manual .bcrow .in{height:42px;border-radius:9px;padding:0 11px}
+.manual .gbtn{min-width:92px;border-radius:9px;padding:0 13px;min-height:42px}
+.outcome{min-height:250px;display:grid;place-items:center;text-align:center;gap:10px;padding:16px 4px;align-content:center}
+.outcome h3{font:400 22px var(--serif);margin:0}
+.outcome p{font-size:14px;color:var(--dim);margin:0;max-width:40ch}
+.outcome .ic.ok{color:var(--green)}.outcome .ic.bad{color:var(--danger)}
+.ver h3{font:400 22px var(--serif);margin:6px 0 4px}
+.ver p{font-size:14px;color:var(--dim);margin:0 0 12px}
+.cands{display:grid;gap:8px}
+.cand{min-height:61px;border-radius:10px;border:1px solid var(--border);padding:8px 10px;display:grid;grid-template-columns:52px 1fr auto;gap:8px;align-items:center;text-align:left;background:var(--surface)}
+.cand .disc{width:46px;height:40px;border-radius:20px;font-size:14px}
+.cand b{display:block;font-size:14px;font-weight:650}.cand small{display:block;font-size:12px;color:var(--dim)}
+.cand .st{font-size:12px;font-weight:740}
+.cand:disabled{opacity:.55}
+.cand[aria-checked="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent)}
+.warn{font-size:12px;color:var(--dim);margin:12px 0}
+.ver-a{display:flex;justify-content:flex-end;gap:8px}
+</style>
+
+<main id="app">
+  <h1 class="sr">Wine collection</h1>
+  <div id="banner"></div>
+  <section id="inv">
+    <div class="hdr" id="hdr"></div>
+    <div class="toolbar">
+      <label class="search" for="q">
+        <span aria-hidden="true" data-i="search:18"></span>
+        <input id="q" type="search" placeholder="Search wine or barcode…" autocomplete="off" enterkeyhint="search">
+        <button class="clr" id="qclr" aria-label="Clear search" hidden><span data-i="x:16"></span></button>
+      </label>
+      <div class="controls" id="controls"></div>
+      <div class="span" id="panel"></div>
+      <div class="span count" id="count" aria-live="polite"></div>
+    </div>
+    <div class="list" id="list"></div>
+    <div id="activity"></div>
+    <div id="totals"></div>
+    <div id="export"></div>
+  </section>
+  <section id="audit" hidden></section>
+</main>
+<div id="sheetRoot"></div>
+<div id="arrRoot"></div>
+<div id="setupRoot"></div>
+<div id="scanRoot"></div>
+<input type="file" id="photoIn" accept="image/*" capture="environment" hidden>
+<input type="file" id="libIn" accept="image/*" hidden>
+<input type="file" id="csvIn" accept=".csv,text/csv" hidden>
+
+<script src="vendor/zxing-library-0.21.3.min.js"></script>
+<script>
+"use strict";
+/* ============ Icons ============ */
+const IC={
+ search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>',
+ minus:'<path d="M5 12h14"/>',
+ menu:'<path d="M4 7h16M4 12h16M4 17h16"/>',
+ x:'<path d="M6 6l12 12M18 6 6 18"/>',
+ filter:'<path d="M4 6h16M7 12h10M10 18h4"/>',
+ chev:'<path d="m6 9 6 6 6-6"/>',
+ bottle:'<path d="M10 2h4v4.5l1.4 2.2c.4.6.6 1.3.6 2V21a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10.7c0-.7.2-1.4.6-2L10 6.5z"/><path d="M8 14h8"/>',
+ check:'<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+ clip:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4M9 10h6M9 14h6M9 18h3"/>',
+ back:'<path d="M19 12H5m6-6-6 6 6 6"/>',
+ download:'<path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/>',
+ sheet:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/>',
+ barcode:'<path d="M4 5v14M7.5 5v14M11 5v14M14 5v9M17.5 5v14M20 5v14M14 17.5v1.5"/>',
+ camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+ alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5v.01"/>',
+ okc:'<circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.8 2.8L16.5 9.3"/>',
+ upload:'<path d="M12 20V9m-5 5 5-5 5 5M5 4h14"/>'
+};
+const icon=(n,s=20)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n]}</svg>`;
+document.querySelectorAll('[data-i]').forEach(el=>{const [n,s]=el.dataset.i.split(':');el.innerHTML=icon(n,+s)});
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ============ Store ============ */
+// Collections mirror the SQLite tables: wines, wine_activity, audit_sessions, audit_items.
+const COLLS=['wines','activity','audits','auditItems','settings'];
+const S={wines:[],activity:[],audits:[],auditItems:[],settings:[],loaded:{},ready:false,err:null,mode:'pending'};
+let DB=null;
+const LS_KEY='wine-tracker-local-v1';
+function lsSave(){try{const d={};COLLS.forEach(c=>d[c]=S[c]);localStorage.setItem(LS_KEY,JSON.stringify(d))}catch(e){}}
+function lsLoad(){try{const d=JSON.parse(localStorage.getItem(LS_KEY)||'null');if(d)COLLS.forEach(c=>S[c]=d[c]||[])}catch(e){}}
+async function put(coll,obj){
+  const i=S[coll].findIndex(r=>r.id===obj.id);
+  if(i>=0)S[coll][i]=obj;else S[coll].push(obj);
+  if(DB){await DB.collection(coll).doc(String(obj.id)).set(obj)}else lsSave();
+}
+async function del(coll,id){
+  S[coll]=S[coll].filter(r=>r.id!==id);
+  if(DB){await DB.collection(coll).doc(String(id)).delete()}else lsSave();
+}
+async function parallel(tasks,n=8){for(let i=0;i<tasks.length;i+=n)await Promise.all(tasks.slice(i,i+n).map(f=>f()))}
+const nextId=coll=>S[coll].reduce((m,r)=>Math.max(m,r.id),0)+1;
+
+async function boot(){
+  let db=null;
+  try{db=window.claude?await window.claude.use('db'):null}catch(e){db=null}
+  if(db){
+    DB=db;S.mode='cloud';
+    COLLS.forEach(c=>{
+      db.collection(c).onSnapshot(snap=>{
+        S[c]=snap.docs.map(d=>d.data()).filter(Boolean).map(d=>({...d}));
+        S.loaded[c]=true;
+        if(COLLS.every(k=>S.loaded[k]))S.ready=true;
+        scheduleRender();
+      },e=>{S.err=e.message||'Could not load your cellar.';scheduleRender()});
+    });
+  }else{
+    S.mode='local';lsLoad();S.ready=true;scheduleRender();
+    try{navigator.storage?.persist?.()}catch(e){}
+  }
+}
+
+/* ============ Validation (server-authoritative) ============ */
+class VErr extends Error{}
+const digits=s=>String(s??'').replace(/\D/g,'').slice(0,18);
+function vWine(x,{auditFind=false}={}){
+  const out={};
+  const year=x.year===''||x.year==null?null:Number(x.year);
+  if(year!==null&&(!Number.isInteger(year)||year<1800||year>2100))throw new VErr('Vintage must be a year from 1800 to 2100, or blank for NV.');
+  out.year=year;
+  const varietal=String(x.varietal??'').trim();
+  if(varietal.length<1||varietal.length>160)throw new VErr('Varietal is required (up to 160 characters).');
+  out.varietal=varietal;
+  const lim=(k,n,lbl)=>{const v=String(x[k]??'').trim();if(v.length>n)throw new VErr(`${lbl} can be at most ${n} characters.`);out[k]=v};
+  lim('brand',160,'Brand');lim('notes',4000,'Notes');lim('location',120,'Location');lim('bin',80,'Bin');
+  const bc=String(x.barcode??'').trim();
+  if(bc&&!/^\d{6,18}$/.test(bc))throw new VErr('Barcode must be 6–18 digits, or blank.');
+  out.barcode=bc;
+  const q=Number(x.quantity);const minQ=auditFind?1:0;
+  if(!Number.isInteger(q)||q<minQ||q>9999)throw new VErr(`Quantity must be ${minQ}–9999.`);
+  out.quantity=q;
+  const pc=x.priceCents==null?null:Number(x.priceCents);
+  if(pc!==null&&(!Number.isInteger(pc)||pc<0||pc>100000000))throw new VErr('Price must be between $0 and $1,000,000.');
+  out.priceCents=pc;
+  const tags=Array.isArray(x.tags)?x.tags.map(t=>String(t).trim()):[];
+  if(tags.length>12)throw new VErr('A wine can have at most 12 tags.');
+  if(tags.some(t=>t.length<1||t.length>48))throw new VErr('Each tag must be 1–48 characters.');
+  out.tags=tags;
+  const sh=Array.isArray(x.shelves)?x.shelves.map(Number):[];
+  if(sh.some(n=>!Number.isInteger(n)||n<0||n>SHELVES.length))throw new VErr(`Shelves must be 1–${SHELVES.length} or outside the fridge.`);
+  out.shelves=[...new Set(sh)].sort((a,b)=>a-b);
+  const p=x.pending||null;
+  const pq=p?Number(p.quantity):0;
+  if(!Number.isInteger(pq)||pq<0||pq>9999)throw new VErr('Bottles on order must be 0–9999.');
+  const pp=p&&p.priceCents!=null?Number(p.priceCents):null;
+  if(pp!==null&&(!Number.isInteger(pp)||pp<0||pp>100000000))throw new VErr('Order price must be between $0 and $1,000,000.');
+  out.pending=pq>0?{quantity:pq,priceCents:pp}:null;
+  return out;
+}
+const pendQ=w=>w.pending&&w.pending.quantity>0?w.pending.quantity:0;
+const nameOf=w=>w.brand||w.varietal;
+const yearTxt=y=>y==null?'NV':String(y);
+/* Fridge layout: shelf 1 is the top. min/max = bottles it holds. */
+const DEFAULT_SHELVES=[1,2,3,4,5,6].map(n=>({n,min:8,max:8}));
+let SHELVES=DEFAULT_SHELVES;
+const fridgeDoc=()=>S.settings.find(d=>d.id==='fridge')||null;
+function syncShelves(){
+  const f=fridgeDoc();
+  SHELVES=f&&Array.isArray(f.shelves)&&f.shelves.length?f.shelves.map((x,i)=>({n:i+1,min:Number(x.min)||Number(x.max)||1,max:Number(x.max)||1})):DEFAULT_SHELVES;
+}
+const capTxt=s=>s.min===s.max?String(s.max):`${s.min}–${s.max}`;
+const shelvesOf=w=>Array.isArray(w.shelves)?w.shelves:[];
+const OUT=0;
+const shelfTxt=w=>{
+  const s=shelvesOf(w);if(!s.length)return'';
+  const nums=s.filter(x=>x!==OUT),out=s.includes(OUT);
+  if(!nums.length)return'Outside the fridge';
+  return(nums.length===1?`Shelf ${nums[0]}`:`Shelves ${nums.join(', ')}`)+(out?' + outside':'');
+};
+const shelfSortKey=w=>{const s=shelvesOf(w);return s.length?Math.min(...s.map(x=>x===OUT?SHELVES.length+1:x)):99};
+
+/* ============ Actions (contract §04–05) ============ */
+const A={
+  async addWine(input,{silentActivity=false}={}){
+    const v=vWine(input);const now=Date.now();const id=nextId('wines');
+    const w={id,...v,createdAt:now,updatedAt:now};
+    await put('wines',w);
+    if(v.quantity>0&&!silentActivity)await logAct(w,'added',v.quantity,now);
+    return{id};
+  },
+  async updateWine(input){
+    const cur=S.wines.find(w=>w.id===input.id);if(!cur)throw new VErr('That wine no longer exists.');
+    const v=vWine(input);
+    await put('wines',{...cur,...v,updatedAt:Date.now()});
+  },
+  async changeQuantity({id,quantity}){
+    if(!Number.isInteger(quantity)||quantity<0||quantity>9999)throw new VErr('Quantity must be 0–9999.');
+    const cur=S.wines.find(w=>w.id===id);if(!cur)throw new VErr('That wine no longer exists.');
+    const delta=quantity-cur.quantity;if(!delta)return;
+    const now=Date.now();
+    await put('wines',{...cur,quantity,updatedAt:now});
+    await logAct(cur,delta>0?'added':'drank',Math.abs(delta),now);
+  },
+  async deleteWine({id}){await del('wines',id)},
+  async drinkByBarcode({barcode,wineId}){
+    if(!/^\d{6,18}$/.test(barcode))throw new VErr('Enter 6–18 digits.');
+    const m=S.wines.filter(w=>w.barcode===barcode).sort((a,b)=>(b.year??-1)-(a.year??-1)||b.updatedAt-a.updatedAt);
+    const cands=m.map(w=>({id:w.id,year:w.year,varietal:w.varietal,brand:w.brand,shelves:shelvesOf(w),quantity:w.quantity}));
+    if(!m.length)return{status:'not_found',message:`No wine in your cellar has barcode ${barcode}.`,candidates:[]};
+    let target;
+    if(wineId!=null){
+      target=m.find(w=>w.id===wineId);
+      if(!target)return{status:'not_found',message:'That record no longer matches this barcode.',candidates:cands};
+      if(target.quantity<=0)return{status:'out_of_stock',message:`${yearTxt(target.year)} ${nameOf(target)} is out of stock. Nothing was changed.`,candidates:cands};
+    }else{
+      const stocked=m.filter(w=>w.quantity>0);
+      if(!stocked.length)return{status:'out_of_stock',message:m.length>1?'Every vintage with this barcode is out of stock.':`${yearTxt(m[0].year)} ${nameOf(m[0])} is out of stock.`,candidates:cands};
+      if(m.length>1)return{status:'needs_verification',message:'More than one record shares this barcode.',candidates:cands};
+      target=m[0];
+    }
+    const now=Date.now();const left=target.quantity-1;
+    await put('wines',{...target,quantity:left,updatedAt:now});
+    await logAct(target,'drank',1,now);
+    return{status:'drank',message:`Drank 1 ${yearTxt(target.year)} ${nameOf(target)}. ${left} ${left===1?'bottle':'bottles'} left.`,candidates:[]};
+  },
+  async startAudit(){
+    const act=activeAudit();if(act)return act;
+    const id=nextId('audits');await put('audits',{id,startedAt:Date.now(),completedAt:null,appliedAt:null});
+    let iid=nextId('auditItems');
+    const items=S.wines.filter(w=>w.quantity>0).map(w=>({id:iid++,auditId:id,wineId:w.id,year:w.year,varietal:w.varietal,brand:w.brand,notes:w.notes,shelves:shelvesOf(w),expectedQuantity:w.quantity,countedQuantity:null}));
+    await parallel(items.map(it=>()=>put('auditItems',it)));
+    return S.audits.find(a=>a.id===id);
+  },
+  async setAuditCount({itemId,countedQuantity}){
+    if(countedQuantity!==null&&(!Number.isInteger(countedQuantity)||countedQuantity<0||countedQuantity>9999))throw new VErr('Count must be 0–9999.');
+    const it=S.auditItems.find(i=>i.id===itemId);if(!it)throw new VErr('That audit item no longer exists.');
+    const a=S.audits.find(x=>x.id===it.auditId);if(!a||a.completedAt)throw new VErr('This audit is no longer active.');
+    await put('auditItems',{...it,countedQuantity});
+  },
+  async discardAudit({auditId}){
+    const items=S.auditItems.filter(i=>i.auditId===auditId);
+    await del('audits',auditId);
+    await parallel(items.map(i=>()=>del('auditItems',i.id)));
+  },
+  async addFoundWineToAudit(input){
+    const a=S.audits.find(x=>x.id===input.auditId);
+    if(!a||a.completedAt)throw new VErr('This audit is no longer active.');
+    const v=vWine(input,{auditFind:true});const now=Date.now();const id=nextId('wines');
+    const w={id,...v,createdAt:now,updatedAt:now};
+    await put('wines',w);await logAct(w,'added',v.quantity,now);
+    await put('auditItems',{id:nextId('auditItems'),auditId:a.id,wineId:id,year:w.year,varietal:w.varietal,brand:w.brand,notes:w.notes,shelves:w.shelves,expectedQuantity:0,countedQuantity:v.quantity});
+    return{id};
+  },
+  async receivePending({id}){
+    const cur=S.wines.find(w=>w.id===id);if(!cur)throw new VErr('That wine no longer exists.');
+    const pq=pendQ(cur);if(!pq)return;
+    const q=cur.quantity,p=cur.priceCents,pp=cur.pending.priceCents;
+    const total=q+pq;if(total>9999)throw new VErr('That would be more than 9999 bottles.');
+    let price=p;
+    if(pp!=null)price=p==null||q===0?pp:Math.round((q*p+pq*pp)/total);
+    const now=Date.now();
+    await put('wines',{...cur,quantity:total,priceCents:price,pending:null,updatedAt:now});
+    await logAct(cur,'added',pq,now);
+  },
+  async setShelves({id,shelves}){
+    const cur=S.wines.find(w=>w.id===id);if(!cur)throw new VErr('That wine no longer exists.');
+    const v=vWine({...cur,shelves});
+    await put('wines',{...cur,shelves:v.shelves,updatedAt:Date.now()});
+  },
+  async finishAudit({auditId,applyCounts}){
+    const a=S.audits.find(x=>x.id===auditId);if(!a||a.completedAt)throw new VErr('This audit is no longer active.');
+    const items=S.auditItems.filter(i=>i.auditId===auditId);
+    if(items.some(i=>i.countedQuantity==null))throw new VErr('Count every wine before finishing the audit.');
+    const now=Date.now();
+    if(applyCounts){
+      await parallel(items.map(i=>async()=>{
+        const w=S.wines.find(x=>x.id===i.wineId);
+        if(w&&w.quantity!==i.countedQuantity)await put('wines',{...w,quantity:i.countedQuantity,updatedAt:now});
+      }));
+    }
+    await put('audits',{...a,completedAt:now,appliedAt:applyCounts?now:null});
+  }
+};
+async function logAct(w,kind,quantity,at){
+  await put('activity',{id:nextId('activity'),wineId:w.id,varietal:w.varietal,brand:w.brand,kind,quantity,createdAt:at});
+}
+const activeAudit=()=>S.audits.filter(a=>!a.completedAt).sort((a,b)=>b.startedAt-a.startedAt)[0]||null;
+
+/* ============ UI state ============ */
+const U={view:'inventory',menu:false,q:'',filterOpen:false,sort:'vintage_desc',
+  f:{stock:'all',vintage:new Set(),brand:new Set(),shelf:new Set(),varietal:new Set(),tags:new Set()},
+  actOpen:false,tab:'varietal',expStatus:'',busy:new Set(),toast:'',fridgeOpen:true,
+  af:{status:'all',brand:new Set(),shelf:new Set(),vintage:new Set(),varietal:new Set()},afOpen:false,
+  discardArmed:false,auditErr:'',finishing:false,starting:false};
+let ARR=null;
+let SETUP=null,SETUP_SKIPPED=false;
+const F_KEYS=['vintage','brand','shelf','varietal','tags'];
+const AF_KEYS=['brand','shelf','vintage','varietal'];
+try{const s=localStorage.getItem('wt-sort');if(s)U.sort=s;if(localStorage.getItem('wt-fridge')==='0')U.fridgeOpen=false}catch(e){}
+function shelfMatch(set,shelves){
+  if(!set.size)return true;
+  return shelves.some(s=>set.has(String(s)))||(set.has('none')&&!shelves.length);
+}
+const shelfChipOpts=()=>[...SHELVES.map(s=>({key:String(s.n),label:`Shelf ${s.n}`})),{key:String(OUT),label:'Outside the fridge'},{key:'none',label:'No shelf'}];
+
+/* ============ Derivations ============ */
+const keyOf=v=>String(v??'').trim().toLowerCase();
+function groupVals(vals){
+  const m=new Map();
+  vals.forEach(v=>{const t=String(v??'').trim();if(!t)return;const k=t.toLowerCase();
+    if(!m.has(k))m.set(k,{key:k,count:0,variants:new Map()});const g=m.get(k);g.count++;g.variants.set(t,(g.variants.get(t)||0)+1)});
+  return[...m.values()].map(g=>{
+    const label=[...g.variants.entries()].sort((a,b)=>{
+      const ca=/^\p{Lu}/u.test(a[0])?0:1,cb=/^\p{Lu}/u.test(b[0])?0:1;
+      return ca-cb||b[1]-a[1]||a[0].localeCompare(b[0])})[0][0];
+    return{key:g.key,label,count:g.count}}).sort((a,b)=>a.label.localeCompare(b.label));
+}
+// Price tiers: under $50, $50–$90, over $90. One wine hue, getting deeper as the bottle gets more special.
+const priceTier=c=>c<5000?'p1':c<=9000?'p2':'p3';
+const fmt$=c=>'$'+Math.round(c/100).toLocaleString('en-US');
+function searchHit(w,q){
+  if(!q)return true;q=q.toLowerCase();
+  return[w.varietal,w.brand,w.notes,w.barcode,yearTxt(w.year),...shelvesOf(w).map(s=>'shelf '+s),...(w.tags||[])].some(v=>String(v??'').toLowerCase().includes(q));
+}
+function filtered(){
+  const f=U.f;
+  return S.wines.filter(w=>{
+    if(f.stock==='in'&&w.quantity<=0)return false;
+    if(f.stock==='out'&&(w.quantity>0||pendQ(w)))return false;
+    if(f.stock==='pending'&&!pendQ(w))return false;
+    if(f.vintage.size&&!f.vintage.has(yearTxt(w.year)))return false;
+    if(!shelfMatch(f.shelf,shelvesOf(w)))return false;
+    for(const k of['brand','varietal'])if(f[k].size&&!f[k].has(keyOf(w[k])))return false;
+    if(f.tags.size&&!(w.tags||[]).some(t=>f.tags.has(keyOf(t))))return false;
+    return searchHit(w,U.q);
+  });
+}
+const lc=(a,b)=>String(a||'').localeCompare(String(b||''),undefined,{sensitivity:'base'});
+const SORTS={
+  vintage_desc:['Vintage: newest',(a,b)=>(a.year==null)-(b.year==null)||(b.year??0)-(a.year??0)||lc(nameOf(a),nameOf(b))],
+  vintage_asc:['Vintage: oldest',(a,b)=>(a.year==null)-(b.year==null)||(a.year??0)-(b.year??0)||lc(nameOf(a),nameOf(b))],
+  varietal:['Varietal: A–Z',(a,b)=>lc(a.varietal,b.varietal)||lc(a.brand,b.brand)],
+  brand:['Brand: A–Z',(a,b)=>lc(a.brand,b.brand)||lc(a.varietal,b.varietal)],
+  shelf:['Shelf: top to bottom',(a,b)=>shelfSortKey(a)-shelfSortKey(b)||shelvesOf(a).length-shelvesOf(b).length||lc(a.brand,b.brand)||(b.year??0)-(a.year??0)],
+  qty:['Quantity: high–low',(a,b)=>b.quantity-a.quantity||lc(nameOf(a),nameOf(b))],
+  price:['Price: high–low',(a,b)=>(a.priceCents==null)-(b.priceCents==null)||(b.priceCents??0)-(a.priceCents??0)]
+};
+if(!SORTS[U.sort])U.sort='vintage_desc';
+const refineCount=()=>(U.f.stock!=='all'?1:0)+F_KEYS.reduce((n,k)=>n+U.f[k].size,0);
+
+/* ============ Render ============ */
+let rq=false;
+function scheduleRender(){if(rq)return;rq=true;requestAnimationFrame(()=>{rq=false;render()})}
+function render(){
+  syncShelves();
+  if(S.ready&&!fridgeDoc()&&!SETUP&&!SETUP_SKIPPED)openSetup({onboarding:true});
+  $('#banner').innerHTML=false?`<div class="banner">Saving on this device only. Open the published artifact while signed in to keep your cellar synced.</div>`:'';
+  const inv=U.view==='inventory';
+  $('#inv').hidden=!inv;$('#audit').hidden=inv;
+  if(inv){renderHeader();renderControls();renderPanel();renderList();renderActivity();renderTotals();renderExport()}
+  if(ARR)renderArrange();
+  if(SETUP)renderSetup();
+  else renderAudit();
+}
+function renderHeader(){
+  const st=S.wines.filter(w=>w.quantity>0);
+  const bottles=st.reduce((n,w)=>n+w.quantity,0);
+  const val=st.reduce((n,w)=>n+(w.priceCents||0)*w.quantity,0);
+  const hasAct=S.activity.length>0,hasW=S.wines.length>0;
+  $('#hdr').innerHTML=`
+   <button class="circ menu-btn" id="menuBtn" aria-label="${U.menu?'Close menu':'Open menu'}" aria-expanded="${U.menu}" aria-controls="dd">${icon(U.menu?'x':'menu',19)}</button>
+   <div class="total num" aria-live="polite"><b>${bottles.toLocaleString()}</b> ${bottles===1?'bottle':'bottles'}${val>0?`<span class="sep">·</span><b>${fmt$(val)}</b> value`:''}</div>
+   <button class="circ scan-btn" data-act="scan" aria-label="Scan to drink">${icon('barcode',20)}</button>
+   <button class="circ add-btn" data-act="add" aria-label="Add wine">${icon('plus',20)}</button>
+   ${U.menu?`<nav class="dd" id="dd">
+     <button class="red" data-act="scan">${icon('barcode',18)}Scan to drink</button>
+     <button class="grn divider" data-act="add">${icon('plus',18)}Add wine</button>
+     ${hasAct?'<button data-jump="activity">Recent activity</button>':''}
+     ${hasW?'<button data-jump="totals">Inventory totals</button>':''}
+     ${hasW?'<button data-act="arrange">Arrange shelves</button>':''}
+     <button data-act="setup">Fridge setup</button>
+     <button data-jump="export">Export inventory</button>
+     <button data-act="openAudit">Cellar audit</button>
+     <a class="ddlink" href="mailto:fivebarnstudio@gmail.com?subject=Pour%20Decisions%20beta%20feedback">Send feedback</a></nav>`:''}`;
+}
+function renderControls(){
+  const n=refineCount();
+  $('#controls').innerHTML=`
+   <button class="pill ${n?'on':''}" id="filterBtn" aria-expanded="${U.filterOpen}" aria-controls="panel">${icon('filter',17)}<span class="t">Filter</span>${n?`<span class="badge" aria-label="${n} active">${n}</span>`:''}<span class="chev">${icon('chev',15)}</span></button>
+   <label class="pill sort"><span class="t">Sort</span><select id="sortSel" aria-label="Sort wines">${Object.entries(SORTS).map(([k,[l]])=>`<option value="${k}" ${k===U.sort?'selected':''}>${l}</option>`).join('')}</select><span class="chev">${icon('chev',15)}</span></label>`;
+}
+function chipGroup(id,title,hint,opts,isSel){
+  if(!opts.length)return'';
+  return`<div class="grp"><h3>${title}<small>${hint}</small></h3><div class="chips">${opts.map(o=>`<button class="chip" data-chip="${id}" data-v="${esc(o.key)}" aria-pressed="${isSel(o.key)}">${esc(o.label)}</button>`).join('')}</div></div>`;
+}
+function renderPanel(){
+  const all=S.wines;
+  $('#count').textContent=S.ready&&all.length?`Showing ${filtered().length} of ${all.length} wines`:'';
+  if(!U.filterOpen){$('#panel').innerHTML='';return}
+  const ys=[...new Set(all.map(w=>yearTxt(w.year)))].sort((a,b)=>a==='NV'?1:b==='NV'?-1:b-a).map(y=>({key:y,label:y,count:all.filter(w=>yearTxt(w.year)===y).length}));
+  const sel=k=>v=>U.f[k].has(v);
+  $('#panel').innerHTML=`<div class="panel" role="region" aria-label="Filters">
+    <div class="panel-top"><span class="label">Refine</span>${refineCount()?'<button class="textbtn" data-act="clearAll">Clear all</button>':''}</div>
+    ${chipGroup('stock','Stock','Choose one',[{key:'all',label:'All'},{key:'in',label:'In stock'},{key:'pending',label:'On order'},{key:'out',label:'Out'}],v=>U.f.stock===v)}
+    ${chipGroup('vintage','Vintage','Select one or more',ys,sel('vintage'))}
+    ${chipGroup('brand','Brand','Select one or more',groupVals(all.map(w=>w.brand)),sel('brand'))}
+    ${chipGroup('shelf','Shelf','Select one or more',shelfChipOpts(),sel('shelf'))}
+    ${chipGroup('varietal','Varietal','Select one or more',groupVals(all.map(w=>w.varietal)),sel('varietal'))}
+    ${chipGroup('tags','Tags','Select one or more',groupVals(all.flatMap(w=>w.tags||[])),sel('tags'))}
+  </div>`;
+}
+function rowHTML(w){
+  const busy=U.busy.has(w.id);
+  const pq=pendQ(w);
+  const hasShelf=shelvesOf(w).length>0;
+  const tags=w.tags||[];
+  const meta=hasShelf||w.priceCents!=null||tags.length;
+  return`<div class="rowwrap"><div class="row ${w.quantity<=0&&!pq?'out':''}">
+   <button class="row-main" data-edit="${w.id}" aria-label="Edit ${esc(yearTxt(w.year))} ${esc(nameOf(w))}">
+     <span class="disc num">${yearTxt(w.year)}</span>
+     <span class="rinfo">
+       <span class="titleline"><h2 class="name">${esc(nameOf(w))}</h2>${w.brand?`<span class="v">${esc(w.varietal)}</span>`:''}</span>
+       ${meta?`<span class="meta">${hasShelf?`<span class="shelfchip">${esc(shelfTxt(w))}</span>`:''}${w.priceCents!=null?`<span class="price num ${priceTier(w.priceCents)}" title="${fmt$(w.priceCents)}" aria-label="${{p1:'Under $50',p2:'$50 to $90',p3:'Over $90'}[priceTier(w.priceCents)]}">${{p1:'$',p2:'$$',p3:'$$$'}[priceTier(w.priceCents)]}</span>`:''}${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</span>`:''}
+       ${w.notes?`<span class="notes">${esc(w.notes)}</span>`:''}
+     </span>
+   </button>
+   <div class="step"><button data-q="-1" data-id="${w.id}" aria-label="Remove one bottle of ${esc(nameOf(w))}" ${w.quantity<=0||busy?'disabled':''}>${icon('minus',20)}</button><span class="n num" aria-label="${w.quantity} bottles">${w.quantity}</span><button data-q="1" data-id="${w.id}" aria-label="Add one bottle of ${esc(nameOf(w))}" ${busy||w.quantity>=9999?'disabled':''}>${icon('plus',20)}</button></div>
+  </div>${pq?`<div class="recv"><span>${pq} ${pq===1?'bottle':'bottles'} on order${w.pending.priceCents!=null?` at ${fmt$(w.pending.priceCents)}`:''}</span><button class="recvbtn" data-receive="${w.id}" ${busy?'disabled':''}>${icon('check',14)}Received</button></div>`:''}</div>`;
+}
+function shelfStats(){
+  const st=S.wines.filter(w=>w.quantity>0);
+  const rows=SHELVES.map(s=>{
+    const on=st.filter(w=>shelvesOf(w).includes(s.n));
+    const solo=on.filter(w=>shelvesOf(w).length===1).reduce((n,w)=>n+w.quantity,0);
+    const shared=on.filter(w=>shelvesOf(w).length>1).reduce((n,w)=>n+w.quantity,0);
+    const brands=groupVals(on.map(w=>w.brand||w.varietal)).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label)).map(g=>g.label);
+    return{...s,solo,shared,brands,wines:on.length};
+  });
+  const none=st.filter(w=>!shelvesOf(w).length);
+  const outside=st.filter(w=>shelvesOf(w).length===1&&shelvesOf(w)[0]===OUT).reduce((n,w)=>n+w.quantity,0);
+  return{rows,none,outside,noneBottles:none.reduce((n,w)=>n+w.quantity,0),total:st.reduce((n,w)=>n+w.quantity,0)};
+}
+function renderFridge(){if(U.tab==='fridge')renderTotals()}
+function fridgeHTML(){
+  const fs=shelfStats();
+  const capMin=SHELVES.reduce((n,s)=>n+s.min,0),capMax=SHELVES.reduce((n,s)=>n+s.max,0);
+  const sum=`${fs.total} bottles${fs.outside?` (${fs.outside} outside the fridge)`:''} · fridge holds ${capMin}–${capMax}${fs.none.length?` · ${fs.none.length} ${fs.none.length===1?'wine needs':'wines need'} a shelf`:''}`;
+  return`<p class="fr-sum num">${esc(sum)}</p><div class="fr-body" id="frBody">
+    ${fs.rows.map(r=>{
+      const pct=v=>Math.min(100,v/r.max*100);
+      const over=r.solo>r.max;
+      const soloW=pct(r.solo),shW=Math.min(100-soloW,pct(r.shared));
+      let free;
+      if(over)free=`<small class="bad">${r.solo-r.max} over</small>`;
+      else if(r.shared){const lo=Math.max(0,r.min-r.solo-r.shared),hi=r.max-r.solo;free=`<small>${hi<=0?'Full':lo===hi?`${hi} open`:`${lo}–${hi} open`}</small>`}
+      else{const lo=r.min-r.solo,hi=r.max-r.solo;free=`<small>${hi<=0?'Full':lo===hi?`${hi} open`:`${Math.max(0,lo)}–${hi} open`}</small>`}
+      const label=r.brands.length?esc(r.brands.slice(0,3).join(', '))+(r.brands.length>3?` +${r.brands.length-3}`:''):'Empty';
+      return`<button class="shelf" data-shelf="${r.n}" aria-pressed="${U.f.shelf.size===1&&U.f.shelf.has(String(r.n))}" aria-label="Shelf ${r.n}: ${r.solo} bottles${r.shared?`, plus ${r.shared} shared with another shelf`:''}, holds ${capTxt(r)}. Show these wines.">
+        <span class="no num">${r.n}</span>
+        <span class="mid"><span class="br ${r.brands.length?'':'empty'}">${label}</span><span class="fill" aria-hidden="true"><i class="${over?'over':''}" style="width:${soloW}%"></i>${shW>0?`<i class="sh" style="width:${shW}%"></i>`:''}</span></span>
+        <span class="rt num">${r.solo}${r.shared?` + ${r.shared}`:''} / ${capTxt(r)}${free}</span></button>`;
+    }).join('')}
+    <div class="fr-foot"><span class="legend"><span class="sw"></span>Shared with another shelf</span>
+      <span style="display:flex;gap:14px"><button class="textbtn" data-act="setup">Edit fridge</button><button class="textbtn" data-act="arrange">${fs.none.length?`Assign ${fs.none.length} ${fs.none.length===1?'wine':'wines'}`:'Arrange shelves'}</button></span></div>
+  </div>`;
+}
+function renderList(){
+  const el=$('#list');
+  if(S.err&&!S.ready){el.innerHTML=`<div class="empty"><h2>Couldn't load your cellar</h2><p>${esc(S.err)}</p><button class="btn pri" data-act="reload">Try again</button></div>`;return}
+  if(!S.ready){el.innerHTML='<div class="shimmer"></div><div class="shimmer"></div><div class="shimmer"></div>';return}
+  if(!S.wines.length){el.innerHTML=`<div class="empty">${icon('bottle',24)}<h2>Your first bottle starts here</h2><p>Add a wine by hand or scan its barcode. You can also import a CSV export below.</p><button class="btn pri" data-act="add">${icon('plus',16)}Add wine</button></div>`;return}
+  const rows=filtered().sort(SORTS[U.sort][1]);
+  const pend=S.wines.filter(w=>pendQ(w));
+  const pendN=pend.reduce((n,w)=>n+pendQ(w),0);
+  const pendBar=pendN&&U.f.stock!=='pending'?`<div class="pendbar"><span><b class="num">${pendN} ${pendN===1?'bottle':'bottles'} on order</b> · ${esc(groupVals(pend.map(w=>w.brand||w.varietal)).map(g=>g.label).join(', '))}. Not counted until received.</span><button class="textbtn" data-act="showPending">Show</button></div>`:'';
+  el.innerHTML=pendBar+(rows.length?rows.map(rowHTML).join(''):`<div class="empty"><h2>No wines found</h2><p>Try a different search or clear your filters.</p><button class="textbtn" data-act="clearEverything">Clear search and filters</button></div>`);
+  if(U.toast)el.insertAdjacentHTML('afterbegin',`<div class="err" role="alert">${esc(U.toast)}</div>`);
+}
+const fmtDate=t=>new Date(t).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+function renderActivity(){
+  const el=$('#activity');
+  const acts=[...S.activity].sort((a,b)=>b.createdAt-a.createdAt||b.id-a.id).slice(0,12);
+  if(!acts.length){el.innerHTML='';return}
+  const shown=U.actOpen?acts:acts.slice(0,3);
+  el.innerHTML=`<section class="sec" id="sec-activity"><div class="sec-h"><h2>Recent activity</h2><button class="top" data-act="top">Top ↑</button></div>
+   ${shown.map(a=>`<div class="act"><span class="mark ${a.kind==='added'?'add':'drank'}" aria-hidden="true">${a.kind==='added'?'+':'−'}</span>
+     <div style="min-width:0"><div class="nm">${esc(a.brand||a.varietal)}</div>${a.brand?`<div class="br">${esc(a.varietal)}</div>`:''}</div>
+     <div class="rt num">${a.kind==='added'?'Added':'Drank'} ${a.quantity}<small>${fmtDate(a.createdAt)}</small></div></div>`).join('')}
+   ${acts.length>3?`<button class="more ${U.actOpen?'open':''}" data-act="toggleAct" aria-expanded="${U.actOpen}">${U.actOpen?'Show less':`Show ${acts.length-3} more`}<span class="chev">${icon('chev',15)}</span></button>`:''}</section>`;
+}
+function renderTotals(){
+  const el=$('#totals');
+  if(!S.wines.length){el.innerHTML='';return}
+  const tabs=`<div class="tabs" role="tablist">${['varietal','brand','fridge'].map(t=>`<button role="tab" data-tab="${t}" aria-selected="${U.tab===t}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>`;
+  if(U.tab==='fridge'){
+    el.innerHTML=`<section class="sec" id="sec-totals"><div class="sec-h"><h2>Inventory totals</h2><button class="top" data-act="top">Top ↑</button></div>${tabs}${fridgeHTML()}</section>`;
+    return;
+  }
+  const st=S.wines.filter(w=>w.quantity>0);const m=new Map();
+  st.forEach(w=>{
+    let k,l;
+    l=String(w[U.tab]||'').trim()||'—';k=l.toLowerCase();
+    if(!m.has(k))m.set(k,{n:0,labels:new Map()});const g=m.get(k);g.n+=w.quantity;g.labels.set(l,(g.labels.get(l)||0)+1);
+  });
+  const rows=[...m.entries()].map(([k,g])=>({k,label:[...g.labels.entries()].sort((a,b)=>(/^\p{Lu}/u.test(a[0])?0:1)-(/^\p{Lu}/u.test(b[0])?0:1)||b[1]-a[1])[0][0],n:g.n}))
+    .sort((a,b)=>b.n-a.n||a.label.localeCompare(b.label));
+  const max=Math.max(1,...rows.map(r=>r.n));const tot=rows.reduce((s,r)=>s+r.n,0);
+  const head={varietal:'Varietal',brand:'Brand'}[U.tab];
+  el.innerHTML=`<section class="sec" id="sec-totals"><div class="sec-h"><h2>Inventory totals</h2><button class="top" data-act="top">Top ↑</button></div>
+   ${tabs}
+   <div class="tt-h"><span>${head}</span><span>Bottles</span></div>
+   ${rows.length?rows.map(r=>`<div class="tt-r"><span class="bar" style="width:${Math.max(4,r.n/max*100)}%"></span><span class="k">${esc(r.label)}</span><span class="c num">${r.n}</span></div>`).join(''):'<p class="dim" style="padding:10px">No bottles in stock.</p>'}
+   <div class="tt-t"><span>Total</span><span class="num">${tot}</span></div></section>`;
+}
+function renderExport(){
+  const el=$('#export');const none=!S.wines.length;
+  el.innerHTML=`<section class="sec" id="sec-export"><div class="sec-h"><h2 style="font-size:22px">Export inventory</h2><button class="top" data-act="top">Top ↑</button></div>
+   <p class="exp-copy">Includes vintage, varietal, brand, barcode, shelves, notes, quantity, bottles on order, price, tags, and created and updated dates.</p>
+   <div class="exp-cards">
+     <button class="card-btn pri" data-act="csv" ${none?'disabled':''}>${icon('download',19)}<span><b>Download CSV</b><small>For Excel or your records</small></span></button>
+     <button class="card-btn sec2" data-act="sheets" ${none?'disabled':''}>${icon('sheet',19)}<span><b>Copy for Google Sheets</b><small>Paste into cell A1</small></span></button>
+   </div>
+   <div class="status" id="expStatus" aria-live="polite">${esc(U.expStatus)}</div>
+   <div class="import">${icon('upload',16)}<span>Moving from another app?</span><button class="textbtn" data-act="importCsv">Import a Pour Decisions CSV</button></div>
+   <button class="audit-entry" data-act="openAudit"><span class="ico-soft">${icon('clip',20)}</span><span><b>Cellar audit</b><small>Count every bottle and reconcile differences</small></span><span class="open">Open</span></button></section>`;
+}
+
+/* ============ Audit view ============ */
+function auditHistory(){
+  return S.audits.filter(a=>a.completedAt).sort((a,b)=>b.completedAt-a.completedAt).slice(0,8).map(a=>{
+    const it=S.auditItems.filter(i=>i.auditId===a.id);
+    return{...a,expected:it.reduce((s,i)=>s+i.expectedQuantity,0),counted:it.reduce((s,i)=>s+(i.countedQuantity||0),0),variances:it.filter(i=>i.countedQuantity!==i.expectedQuantity).length};
+  });
+}
+// Shelves are where a bottle sits now, so audits read them live from the wine, not from the snapshot.
+const itemShelves=i=>{const w=S.wines.find(x=>x.id===i.wineId);return w?shelvesOf(w):shelvesOf(i)};
+const itemShelfTxt=i=>shelfTxt({shelves:itemShelves(i)});
+const sortItems=items=>[...items].sort((a,b)=>(a.year==null)-(b.year==null)||(b.year??0)-(a.year??0)||lc(a.brand,b.brand)||lc(a.varietal,b.varietal));
+function renderAudit(){
+  const el=$('#audit');const act=activeAudit();
+  const back=`<button class="back" data-act="closeAudit">← Inventory</button>`;
+  if(!act){
+    const hist=auditHistory();const none=!S.wines.length;
+    el.innerHTML=`${back}<div class="a-intro"><span class="ico-soft">${icon('clip',24)}</span><span class="label">Annual check</span><h1>Cellar audit</h1>
+     <p>Starting an audit takes a snapshot of every wine you have in stock. Walk the cellar, count each one, then review the differences and choose whether to update your inventory.</p>
+     <button class="startbtn" data-act="startAudit" ${none||U.starting?'disabled':''}>${U.starting?'Starting…':'Start new audit'}</button>
+     ${none?'<p style="font-size:12px">Add a wine before starting an audit.</p>':''}${U.auditErr?`<p class="err">${esc(U.auditErr)}</p>`:''}</div>
+     ${hist.length?`<div class="hist"><span class="label">History</span>${hist.map(h=>`<div class="hrow"><div><b>${fmtDate(h.completedAt)}</b><small>${h.appliedAt?'Inventory updated':'Review only'}</small></div><div class="r num"><b>${h.counted} counted</b><small>${h.variances?`${h.variances} ${h.variances===1?'difference':'differences'}`:'No differences'}</small></div></div>`).join('')}</div>`:''}`;
+    return;
+  }
+  const items=sortItems(S.auditItems.filter(i=>i.auditId===act.id));
+  const checked=items.filter(i=>i.countedQuantity!=null).length;
+  const af=U.af;
+  const vis=items.filter(i=>{
+    if(af.status==='unchecked'&&i.countedQuantity!=null)return false;
+    if(af.status==='differences'&&(i.countedQuantity==null||i.countedQuantity===i.expectedQuantity))return false;
+    if(af.status==='count0'&&i.countedQuantity!==0)return false;
+    if(af.vintage.size&&!af.vintage.has(yearTxt(i.year)))return false;
+    if(!shelfMatch(af.shelf,itemShelves(i)))return false;
+    for(const k of['brand','varietal'])if(af[k].size&&!af[k].has(keyOf(i[k])))return false;
+    return true;
+  });
+  const afN=(af.status!=='all'?1:0)+AF_KEYS.reduce((n,k)=>n+af[k].size,0);
+  const ys=[...new Set(items.map(i=>yearTxt(i.year)))].sort((a,b)=>a==='NV'?1:b==='NV'?-1:b-a).map(y=>({key:y,label:y}));
+  const sel=k=>v=>af[k].has(v);
+  const panel=U.afOpen?`<div class="panel" style="margin-top:10px">
+    <div class="panel-top"><span class="label">Refine</span>${afN?'<button class="textbtn" data-act="afClear">Clear all</button>':''}</div>
+    ${chipGroup('a-status','Check status','Choose one',[{key:'all',label:'All'},{key:'unchecked',label:'Unchecked'},{key:'differences',label:'Differences'},{key:'count0',label:'Count 0'}],v=>af.status===v)}
+    ${chipGroup('a-brand','Brand','Select one or more',groupVals(items.map(i=>i.brand)),sel('brand'))}
+    ${chipGroup('a-shelf','Shelf','Select one or more',shelfChipOpts(),sel('shelf'))}
+    ${chipGroup('a-vintage','Vintage','Select one or more',ys,sel('vintage'))}
+    ${chipGroup('a-varietal','Varietal','Select one or more',groupVals(items.map(i=>i.varietal)),sel('varietal'))}</div>`:'';
+  const rows=vis.map(i=>{
+    const c=i.countedQuantity;const d=c==null?null:c-i.expectedQuantity;
+    const cls=c==null?'':d===0?'ok':'diff';
+    const right=c==null?`<button class="mpill" data-ac="match" data-id="${i.id}">${icon('check',14)}Matches</button><button class="zpill" data-ac="zero" data-id="${i.id}">Count 0</button>`
+      :`<div class="step sm"><button data-ac="dec" data-id="${i.id}" aria-label="One fewer" ${c<=0?'disabled':''}>${icon('minus',18)}</button><span class="n num" aria-label="Counted ${c}">${c}</span><button data-ac="inc" data-id="${i.id}" aria-label="One more" ${c>=9999?'disabled':''}>${icon('plus',18)}</button></div>
+        <span class="astat ${d===0?'ok':'bad'}">${d===0?'Matches':`${d>0?'+':''}${d} difference`}</span>`;
+    return`<div class="arow ${cls}"><div class="aid"><span class="disc num">${yearTxt(i.year)}</span><div style="min-width:0;display:grid;gap:1px">
+      <span class="name">${esc(i.brand||i.varietal)}</span>${i.brand?`<span class="v">${esc(i.varietal)}</span>`:''}
+      ${itemShelves(i).length?`<span class="lc">${esc(itemShelfTxt(i))}</span>`:''}
+      ${i.notes?`<span class="nt">${esc(i.notes)}</span>`:''}<span class="ex num">Expected ${i.expectedQuantity}</span></div></div>
+      <div class="acts">${right}</div></div>`;
+  }).join('');
+  const done=checked===items.length;
+  const vars=items.filter(i=>i.countedQuantity!=null&&i.countedQuantity!==i.expectedQuantity);
+  const bottles=items.reduce((s,i)=>s+(i.countedQuantity||0),0);
+  const review=`<div class="review"><div class="rv-h"><div><span class="label">${done?'Ready to finish':'Still counting'}</span>
+     <h2>${!done?`${items.length-checked} ${items.length-checked===1?'wine':'wines'} left to count`:vars.length?`${vars.length} ${vars.length===1?'difference':'differences'} found`:'Everything matches'}</h2></div><span class="dim num" style="font-size:12px">${bottles} bottles counted</span></div>
+     ${vars.map(i=>`<div class="vrow"><div style="min-width:0"><b>${esc(yearTxt(i.year))} ${esc(i.brand||i.varietal)}</b><small>${esc([i.brand?i.varietal:'',itemShelfTxt(i),i.notes].filter(Boolean).join(' · '))}</small></div><span class="d num">${i.expectedQuantity} → ${i.countedQuantity}</span></div>`).join('')}
+     <div class="rv-a">${done&&vars.length?`<button class="btn sec" data-act="finishNo" ${U.finishing?'disabled':''}>Finish without changes</button>`:''}
+       <button class="btn pri" data-act="finishYes" ${!done||U.finishing?'disabled':''}>${U.finishing?'Finishing…':vars.length?'Update inventory &amp; finish':'Finish audit'}</button></div>
+     ${U.auditErr?`<p class="err" role="alert">${esc(U.auditErr)}</p>`:''}</div>
+     <button class="discard ${U.discardArmed?'armed':''}" data-act="discard">${U.discardArmed?'Tap again to discard audit':'Discard audit'}</button>`;
+  el.innerHTML=`${back}<div class="a-head"><div><span class="label">In progress</span><h1>Cellar audit</h1><span class="dim" style="font-size:12px">Started ${fmtDate(act.startedAt)}</span></div>
+    <div class="prog"><b class="num">${checked}/${items.length}</b><span class="dim" style="font-size:12px">wines checked</span></div></div>
+    <div class="pbar" role="progressbar" aria-valuemin="0" aria-valuemax="${items.length}" aria-valuenow="${checked}"><i style="width:${items.length?checked/items.length*100:0}%"></i></div>
+    <p class="instr">Pull each wine, then tap Matches or enter the physical bottle count.</p>
+    <button class="found" data-act="foundWine">${icon('plus',20)}<span><b>Found a wine not in the list</b><small>Add it to inventory and record it in this audit</small></span></button>
+    <div class="a-tools"><button class="pill ${afN?'on':''}" data-act="afToggle" aria-expanded="${U.afOpen}">${icon('filter',17)}<span class="t">Filter audit</span>${afN?`<span class="badge">${afN}</span>`:''}<span class="chev">${icon('chev',15)}</span></button><span class="count" aria-live="polite" style="font-size:12px">Showing ${vis.length} of ${items.length}</span></div>
+    ${panel}
+    <div style="margin-top:8px">${rows||`<div class="empty"><p>No wines match these filters.</p><button class="textbtn" data-act="afClear">Clear filters</button></div>`}</div>
+    ${review}`;
+}
+
+/* ============ Events ============ */
+$('#q').addEventListener('input',e=>{U.q=e.target.value;$('#qclr').hidden=!U.q;renderList();renderPanel()});
+$('#qclr').addEventListener('click',e=>{e.preventDefault();U.q='';$('#q').value='';$('#qclr').hidden=true;$('#q').focus();renderList();renderPanel()});
+document.addEventListener('change',e=>{
+  if(e.target.id==='sortSel'){U.sort=e.target.value;try{localStorage.setItem('wt-sort',U.sort)}catch(x){}renderList()}
+});
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('button');
+  if(U.menu&&!e.target.closest('#dd')&&!e.target.closest('#menuBtn')){U.menu=false;renderHeader();if(!t)return}
+  if(!t)return;
+  if(t.id==='menuBtn'){U.menu=!U.menu;renderHeader();return}
+  if(t.id==='filterBtn'){U.filterOpen=!U.filterOpen;renderControls();renderPanel();return}
+  if(t.dataset.jump){U.menu=false;renderHeader();document.getElementById('sec-'+t.dataset.jump)?.scrollIntoView({behavior:'smooth'});return}
+  if(t.dataset.chip){chip(t.dataset.chip,t.dataset.v);return}
+  if(t.dataset.shelf){
+    const v=t.dataset.shelf;const only=U.f.shelf.size===1&&U.f.shelf.has(v);
+    U.f.shelf.clear();if(!only)U.f.shelf.add(v);
+    renderControls();renderPanel();renderFridge();renderList();
+    if(!only)$('#list').scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+  if(t.dataset.tab){U.tab=t.dataset.tab;renderTotals();return}
+  if(t.dataset.edit){openSheet({mode:'edit',id:+t.dataset.edit});return}
+  if(t.dataset.q){stepQty(+t.dataset.id,+t.dataset.q);return}
+  if(t.dataset.receive){
+    const id=+t.dataset.receive;const w=S.wines.find(x=>x.id===id);if(!w||U.busy.has(id))return;
+    U.busy.add(id);U.toast='';renderList();
+    try{await A.receivePending({id})}catch(x){U.toast=`Couldn't receive ${nameOf(w)}: ${x.message}`}
+    U.busy.delete(id);render();return;
+  }
+  if(t.dataset.ac){auditCount(+t.dataset.id,t.dataset.ac);return}
+  const a=t.dataset.act;if(!a)return;
+  U.menu=false;
+  switch(a){
+    case'scan':renderHeader();openScanner({mode:'drink'});break;
+    case'add':renderHeader();openSheet({mode:'add'});break;
+    case'openAudit':U.view='audit';U.auditErr='';U.discardArmed=false;render();window.scrollTo(0,0);break;
+    case'closeAudit':U.view='inventory';render();window.scrollTo(0,0);break;
+    case'top':window.scrollTo({top:0,behavior:'smooth'});break;
+    case'toggleAct':U.actOpen=!U.actOpen;renderActivity();break;
+    case'clearAll':U.f.stock='all';F_KEYS.forEach(k=>U.f[k].clear());renderControls();renderPanel();renderFridge();renderList();break;
+    case'clearEverything':U.q='';$('#q').value='';$('#qclr').hidden=true;U.f.stock='all';F_KEYS.forEach(k=>U.f[k].clear());render();break;
+    case'reload':location.reload();break;
+    case'csv':exportCsv();break;
+    case'sheets':exportSheets();break;
+    case'importCsv':$('#csvIn').click();break;
+    case'startAudit':U.starting=true;U.auditErr='';renderAudit();try{await A.startAudit()}catch(x){U.auditErr=x.message}U.starting=false;renderAudit();break;
+    case'afToggle':U.afOpen=!U.afOpen;renderAudit();break;
+    case'afClear':U.af.status='all';AF_KEYS.forEach(k=>U.af[k].clear());renderAudit();break;
+    case'arrange':renderHeader();openArrange();break;
+    case'setup':renderHeader();openSetup({onboarding:false});break;
+    case'showPending':U.f.stock='pending';renderControls();renderPanel();renderList();break;
+    case'foundWine':openSheet({mode:'auditFind',auditId:activeAudit()?.id});break;
+    case'finishYes':case'finishNo':{
+      const act=activeAudit();if(!act)break;
+      const items=S.auditItems.filter(i=>i.auditId===act.id);
+      const vars=items.some(i=>i.countedQuantity!==i.expectedQuantity);
+      U.finishing=true;U.auditErr='';renderAudit();
+      try{await A.finishAudit({auditId:act.id,applyCounts:a==='finishYes'&&vars})}catch(x){U.auditErr=x.message}
+      U.finishing=false;U.discardArmed=false;renderAudit();break;}
+    case'discard':{
+      if(!U.discardArmed){U.discardArmed=true;renderAudit();break}
+      const act=activeAudit();U.discardArmed=false;
+      if(act){try{await A.discardAudit({auditId:act.id})}catch(x){U.auditErr=x.message}}
+      renderAudit();break;}
+  }
+});
+function chip(group,v){
+  if(group.startsWith('a-')){
+    const k=group.slice(2);
+    if(k==='status')U.af.status=v;else U.af[k].has(v)?U.af[k].delete(v):U.af[k].add(v);
+    renderAudit();return;
+  }
+  if(group==='stock')U.f.stock=v;else U.f[group].has(v)?U.f[group].delete(v):U.f[group].add(v);
+  renderControls();renderPanel();renderFridge();renderList();
+}
+async function stepQty(id,d){
+  const w=S.wines.find(x=>x.id===id);if(!w||U.busy.has(id))return;
+  const prev=w.quantity;const q=Math.max(0,Math.min(9999,prev+d));if(q===prev)return;
+  U.busy.add(id);U.toast='';renderList();renderHeader();
+  try{await A.changeQuantity({id,quantity:q})}
+  catch(x){const cur=S.wines.find(z=>z.id===id);if(cur&&cur.quantity!==prev)cur.quantity=prev;U.toast=`Couldn't update ${nameOf(w)}: ${x.message}`}
+  U.busy.delete(id);render();
+}
+async function auditCount(id,op){
+  const it=S.auditItems.find(i=>i.id===id);if(!it)return;
+  const c=it.countedQuantity;
+  const v=op==='match'?it.expectedQuantity:op==='zero'?0:op==='dec'?Math.max(0,c-1):Math.min(9999,c+1);
+  U.discardArmed=false;U.auditErr='';
+  try{await A.setAuditCount({itemId:id,countedQuantity:v})}catch(x){U.auditErr=x.message}
+  renderAudit();
+}
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if($('#scanRoot').innerHTML){closeScanner();return}
+  if(ARR){closeArrange();return}
+  if(SETUP&&!SETUP.onboarding){closeSetup();return}
+  if($('#sheetRoot').innerHTML){closeSheet();return}
+  if(U.menu){U.menu=false;renderHeader();$('#menuBtn')?.focus()}
+});
+
+/* ============ Export / import ============ */
+const HEAD=['ID','Vintage','Varietal','Brand','UPC / EAN barcode','Shelves','Notes','Quantity','On order','Price (USD)','Tags','Created at','Updated at'];
+const rowVals=w=>[w.id,w.year??'',w.varietal,w.brand,w.barcode,shelvesOf(w).map(s=>s===OUT?'Outside':s).join('; '),w.notes,w.quantity,pendQ(w)||'',w.priceCents==null?'':(w.priceCents/100).toFixed(2),(w.tags||[]).join('; '),new Date(w.createdAt).toISOString(),new Date(w.updatedAt).toISOString()];
+const sortedForExport=()=>[...S.wines].sort((a,b)=>a.id-b.id);
+function guard(v){v=String(v??'');return/^[=+\-@]/.test(v)?"'"+v:v}
+function csvCell(v){v=guard(v);return/[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function setExp(msg){U.expStatus=msg;const el=$('#expStatus');if(el)el.textContent=msg}
+async function exportCsv(){
+  const body='﻿'+[HEAD,...sortedForExport().map(rowVals)].map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
+  const d=new Date();const fn=`wine-inventory-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.csv`;
+  let dl=null;try{dl=window.claude?await window.claude.use('downloads'):null}catch(e){}
+  if(!dl){
+    try{const url=URL.createObjectURL(new Blob([body],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download=fn;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);setExp(`Saved ${fn}.`)}
+    catch(e){setExp('Your browser blocked the download. Use Copy for Google Sheets instead.')}
+    return}
+  try{await dl.save({filename:fn,data:body});setExp(`Saved ${fn}.`)}
+  catch(x){setExp(x.code==='declined'?'Download cancelled.':`Couldn't save the CSV (${x.code||'error'}).`)}
+}
+async function exportSheets(){
+  const clean=v=>guard(String(v??'').replace(/[\t\r\n]+/g,' '));
+  const tsv=[HEAD,...sortedForExport().map(rowVals)].map(r=>r.map(clean).join('\t')).join('\n');
+  const n=S.wines.length;
+  try{await navigator.clipboard.writeText(tsv);setExp(`Copied ${n} wines. Open Google Sheets and paste into cell A1.`)}
+  catch(e){
+    const ta=document.createElement('textarea');ta.value=tsv;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand('copy')}catch(x){}ta.remove();
+    setExp(ok?`Copied ${n} wines. Open Google Sheets and paste into cell A1.`:'Your browser blocked the clipboard. Try Download CSV instead.');
+  }
+}
+function parseCsv(text){
+  text=text.replace(/^﻿/,'');const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c==='"')q=true;else if(c===','){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}
+    else f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}
+  return rows.filter(r=>r.some(v=>v!==''));
+}
+$('#csvIn').addEventListener('change',async e=>{
+  const file=e.target.files[0];e.target.value='';if(!file)return;
+  setExp('Importing…');
+  try{
+    const rows=parseCsv(await file.text());const h=rows.shift().map(x=>x.trim().toLowerCase());
+    const col=n=>h.indexOf(n.toLowerCase());
+    const ix={id:col('ID'),year:col('Vintage'),varietal:col('Varietal'),brand:col('Brand'),barcode:col('UPC / EAN barcode'),shelves:col('Shelves'),pend:col('On order'),notes:col('Notes'),qty:col('Quantity'),price:col('Price (USD)'),tags:col('Tags'),c:col('Created at'),u:col('Updated at')};
+    if(ix.varietal<0)throw new Error('This file has no Varietal column. Use a CSV exported from Pour Decisions.');
+    const ug=v=>String(v??'').replace(/^'(?=[=+\-@])/,'');
+    const g=(r,k)=>ix[k]>=0?ug(r[ix[k]]).trim():'';
+    let added=0,skipped=0,bad=[];
+    const tasks=[];
+    for(const r of rows){
+      const id=Number(g(r,'id'));
+      if(Number.isInteger(id)&&id>0&&S.wines.some(w=>w.id===id)){skipped++;continue}
+      try{
+        const yr=g(r,'year');const pr=g(r,'price').replace(/[$,]/g,'');
+        const v=vWine({year:yr===''||/^nv$/i.test(yr)?null:yr,varietal:g(r,'varietal'),brand:g(r,'brand'),barcode:digits(g(r,'barcode')),shelves:[...(g(r,'shelves').match(/\d+/g)||[]).map(Number),.../outside/i.test(g(r,'shelves'))?[OUT]:[]],notes:g(r,'notes'),
+          pending:/^\d+$/.test(g(r,'pend'))&&+g(r,'pend')>0?{quantity:+g(r,'pend'),priceCents:null}:null,
+          quantity:g(r,'qty')===''?1:Number(g(r,'qty')),priceCents:pr===''?null:Math.round(parseFloat(pr)*100),tags:g(r,'tags')?g(r,'tags').split(';').map(t=>t.trim()).filter(Boolean):[]});
+        const c=Date.parse(g(r,'c'))||Date.now(),u=Date.parse(g(r,'u'))||c;
+        const nid=Number.isInteger(id)&&id>0?id:nextId('wines')+tasks.length;
+        const w={id:nid,...v,createdAt:c,updatedAt:u};
+        S.wines.push(w);tasks.push(()=>put('wines',w));added++;
+      }catch(x){bad.push(x.message)}
+    }
+    await parallel(tasks);
+    setExp(`Imported ${added} ${added===1?'wine':'wines'}${skipped?`, skipped ${skipped} already here`:''}${bad.length?`, ${bad.length} rows had errors (${bad[0]})`:''}.`);
+    render();
+  }catch(x){setExp(`Import failed: ${x.message}`)}
+});
+
+/* ============ Add / Edit sheet ============ */
+const PRESET_TAGS=['Long-term cellaring','Special events','Drink soon','Gift'];
+let SH=null;
+function openSheet(opts){
+  const w=opts.mode==='edit'?S.wines.find(x=>x.id===opts.id):null;
+  if(opts.mode==='edit'&&!w)return;
+  SH={...opts,saving:false,removeArmed:false,err:'',bcNote:'',
+    tags:w?[...(w.tags||[])]:[],shelves:w?[...shelvesOf(w)]:[],returnFocus:document.activeElement,
+    init:w?{year:w.year??'',quantity:w.quantity,varietal:w.varietal,brand:w.brand,barcode:w.barcode,price:w.priceCents==null?'':(w.priceCents/100).toFixed(2),notes:w.notes,
+        pq:pendQ(w)||'',pp:pendQ(w)&&w.pending.priceCents!=null?(w.pending.priceCents/100).toFixed(2):''}
+      :{year:'',quantity:1,varietal:'',brand:'',barcode:opts.barcode||'',price:'',notes:'',pq:'',pp:''}};
+  const title={add:'Add wine',edit:'Edit wine',auditFind:'Add audit find'}[opts.mode];
+  const i=SH.init;
+  $('#sheetRoot').innerHTML=`<div class="bd" id="sheetBd"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="shTitle">
+   <div class="sh-h"><div><h2 id="shTitle">${title}</h2>${opts.mode==='auditFind'?'<p>This bottle becomes a real inventory record and is counted in the current audit.</p>':''}</div><button class="close" data-sh="close" aria-label="Close">${icon('x',18)}</button></div>
+   <form class="form" id="wf" novalidate>
+    <div class="fld c6"><span class="lb" id="qlbl">Quantity</span><div class="qstep" role="group" aria-labelledby="qlbl"><button type="button" data-sh="qdec" aria-label="Decrease quantity">${icon('minus',18)}</button><input id="f-qty" inputmode="numeric" class="num" value="${i.quantity}" aria-labelledby="qlbl"><button type="button" data-sh="qinc" aria-label="Increase quantity">${icon('plus',18)}</button></div></div>
+    <div class="fld c6"><label for="f-price">Price ($)</label><input class="in num" id="f-price" inputmode="decimal" placeholder="0.00" value="${esc(i.price)}"></div>
+    <div class="fld c2"><label for="f-year">Year</label><input class="in num" id="f-year" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="NV" autocomplete="off" value="${esc(i.year)}"><div id="ac-year"></div></div>
+    <div class="fld c5"><label for="f-brand">Brand</label><input class="in" id="f-brand" maxlength="160" autocomplete="off" value="${esc(i.brand)}"><div id="ac-brand"></div></div>
+    <div class="fld c5"><label for="f-varietal">Varietal <span class="req">*</span></label><input class="in" id="f-varietal" maxlength="160" autocomplete="off" value="${esc(i.varietal)}" required><div id="ac-varietal" class="ac-right"></div></div>
+    <div class="quick full" id="brandQuick" style="margin-top:-4px"></div>
+    <div class="fld full"><label for="f-notes">Notes</label><textarea class="in" id="f-notes" maxlength="4000">${esc(i.notes)}</textarea></div>
+    <div class="fld full"><label for="f-barcode">UPC / EAN</label><div class="bcrow"><input class="in num" id="f-barcode" inputmode="numeric" maxlength="18" autocomplete="off" value="${esc(i.barcode)}"><button type="button" class="gbtn" data-sh="scanBc">${icon('barcode',18)}Scan</button></div><div id="bcNote" aria-live="polite"></div></div>
+    <fieldset class="full"><legend>Shelf Location <span style="font-weight:500">· top is 1, pick two if it's split</span></legend><div class="shelfpick" id="shelfPick" style="margin-top:6px"></div></fieldset>
+    <fieldset class="full"><legend>Tags</legend><div class="tagchips" id="tagChips"></div>
+      <div class="tagadd"><input class="in" id="f-tag" maxlength="48" placeholder="Custom tag" aria-label="Custom tag"><button type="button" class="btn sec" data-sh="addTag">Add</button></div><div id="tagNote"></div></fieldset>
+    ${opts.mode==='auditFind'?'':`<fieldset class="full pendfs"><legend>On order, not picked up yet</legend>
+      <div class="fld"><span class="lb" id="pqlbl">Quantity</span><div class="qstep" role="group" aria-labelledby="pqlbl"><button type="button" data-sh="pqdec" aria-label="Decrease bottles on order">${icon('minus',18)}</button><input id="f-pq" inputmode="numeric" class="num" maxlength="4" value="${esc(i.pq||0)}" aria-labelledby="pqlbl"><button type="button" data-sh="pqinc" aria-label="Increase bottles on order">${icon('plus',18)}</button></div></div>
+      <div class="fld"><label for="f-pp">Price each ($)</label><input class="in num" id="f-pp" inputmode="decimal" placeholder="0.00" value="${esc(i.pp)}"></div>
+      <p class="full dim" style="margin:0;font-size:11px;grid-column:1/-1">Not counted in inventory or value until you tap Received.</p></fieldset>`}
+   </form>
+   <div id="shErr"></div>
+   <div class="foot">${opts.mode==='edit'?`<button type="button" class="rm" id="rmBtn" data-sh="remove">Remove wine</button>`:''}
+     <div class="r"><button type="button" class="save" id="saveBtn" data-sh="save"></button></div></div>
+  </div></div>`;
+  updateSheet();renderQuick();renderTags();renderShelfPick();
+  const yr=$('#f-year');if(yr){yr.focus({preventScroll:true});yr.select();showYearAC()}
+}
+function closeSheet(){if(!SH)return;const rf=SH.returnFocus;SH=null;$('#sheetRoot').innerHTML='';try{rf?.focus()}catch(e){}}
+function readForm(){
+  const v=id=>$('#f-'+id).value;
+  const pr=v('price').trim().replace(/[$,]/g,'');
+  const toC=s=>{s=s.trim().replace(/[$,]/g,'');return s===''?null:(isFinite(+s)?Math.round(parseFloat(s)*100):NaN)};
+  const pqEl=$('#f-pq');
+  const pending=pqEl&&pqEl.value.trim()?{quantity:Number(pqEl.value.trim()),priceCents:toC($('#f-pp').value)}:null;
+  return{year:v('year').trim(),quantity:Number(v('qty')),varietal:v('varietal'),brand:v('brand'),barcode:v('barcode'),notes:v('notes'),
+    priceCents:toC(pr),tags:SH.tags,shelves:SH.shelves,pending};
+}
+const shelfButtons=(sel,attr)=>SHELVES.map(s=>`<button type="button" class="sp num" ${attr}="${s.n}" aria-pressed="${sel.includes(s.n)}" aria-label="Shelf ${s.n}">${s.n}</button>`).join('')
+  +`<button type="button" class="sp outbtn" ${attr}="${OUT}" aria-pressed="${sel.includes(OUT)}">Outside</button>`;
+function renderShelfPick(){
+  const el=$('#shelfPick');if(!el)return;
+  el.innerHTML=shelfButtons(SH.shelves,'data-shpick');
+}
+function updateSheet(){
+  if(!SH)return;
+  const bc=$('#f-barcode').value;
+  const n=$('#bcNote');
+  if(bc.length>0&&bc.length<6)n.innerHTML='<div class="note bad">Enter at least 6 digits.</div>';
+  else n.innerHTML=SH.bcNote?`<div class="note ok">${esc(SH.bcNote)}</div>`:'';
+  const q=Number($('#f-qty').value);const minQ=SH.mode==='auditFind'?1:0;
+  $('[data-sh="qdec"]').disabled=!(q>minQ);$('[data-sh="qinc"]').disabled=!(q<9999);
+  const pqEl=$('#f-pq');if(pqEl){const pv=parseInt(pqEl.value,10)||0;$('[data-sh="pqdec"]').disabled=pv<=0;$('[data-sh="pqinc"]').disabled=pv>=9999}
+  const sb=$('#saveBtn');
+  sb.textContent=SH.saving?'Saving…':{add:'Add to cellar',edit:'Save changes',auditFind:'Add find to audit'}[SH.mode];
+  sb.disabled=SH.saving||!$('#f-varietal').value.trim()||(bc.length>0&&bc.length<6);
+  $('#shErr').innerHTML=SH.err?`<p class="err" role="alert">${esc(SH.err)}</p>`:'';
+  const rm=$('#rmBtn');if(rm){rm.classList.toggle('armed',SH.removeArmed);rm.textContent=SH.removeArmed?'Tap again to remove':'Remove wine'}
+}
+function renderQuick(){
+  const el=$('#brandQuick');if(!el)return;
+  const cur=keyOf($('#f-brand').value);
+  const top=groupVals(S.wines.map(w=>w.brand)).sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label)).slice(0,8);
+  el.innerHTML=top.map(o=>`<button type="button" class="qchip" data-brandpick="${esc(o.label)}" aria-pressed="${cur===o.key}">${esc(o.label)}</button>`).join('');
+}
+function renderTags(){
+  const el=$('#tagChips');if(!el)return;
+  const have=new Set(SH.tags.map(keyOf));const seen=new Set();const opts=[];
+  [...PRESET_TAGS,...groupVals(S.wines.flatMap(w=>w.tags||[])).map(g=>g.label),...SH.tags].forEach(t=>{const k=keyOf(t);if(!seen.has(k)){seen.add(k);opts.push(SH.tags.find(x=>keyOf(x)===k)||t)}});
+  el.innerHTML=opts.map(t=>`<button type="button" class="qchip" data-tagpick="${esc(t)}" aria-pressed="${have.has(keyOf(t))}">${esc(t)}</button>`).join('');
+}
+function showYearAC(){
+  const box=$('#ac-year');const inp=$('#f-year');if(!box||!inp)return;
+  const v=inp.value.trim();const Y=new Date().getFullYear();
+  const yrs=[0,1,2,3,4].map(d=>String(Y-d)).filter(y=>!v||(y.startsWith(v)&&y!==v));
+  box.innerHTML=yrs.length?`<div class="ac ac-years" role="listbox" aria-label="Recent vintages">${yrs.map(y=>`<button type="button" role="option" class="num" data-acpick="year" data-v="${y}"><b>${y}</b></button>`).join('')}</div>`:'';
+}
+function showAC(field){
+  const box=$('#ac-'+field);if(!box)return;
+  const q=$('#f-'+field).value.trim().toLowerCase();
+  if(!q){box.innerHTML='';return}
+  const lim=field==='varietal'?6:8;
+  const opts=groupVals(S.wines.map(w=>w[field])).filter(o=>o.key.includes(q)&&o.key!==q)
+    .sort((a,b)=>(b.key.startsWith(q))-(a.key.startsWith(q))||b.count-a.count||a.label.localeCompare(b.label)).slice(0,lim);
+  box.innerHTML=opts.length?`<div class="ac" role="listbox">${opts.map(o=>`<button type="button" role="option" data-acpick="${field}" data-v="${esc(o.label)}"><b>${esc(o.label)}</b></button>`).join('')}</div>`:'';
+}
+$('#sheetRoot').addEventListener('input',e=>{
+  if(!SH)return;const id=e.target.id;
+  if(id==='f-barcode'){const d=digits(e.target.value);if(d!==e.target.value)e.target.value=d;SH.bcNote=''}
+  if(id==='f-year'){e.target.value=e.target.value.replace(/\D/g,'').slice(0,4);showYearAC()}
+  if(id==='f-qty'||id==='f-pq'){e.target.value=e.target.value.replace(/\D/g,'').slice(0,4)}
+  if(id==='f-varietal')showAC('varietal');
+  if(id==='f-brand'){showAC('brand');renderQuick()}
+  SH.err='';SH.removeArmed=false;updateSheet();
+});
+$('#sheetRoot').addEventListener('focusout',e=>{
+  if(!SH)return;
+  if(e.target.id==='f-year'){setTimeout(()=>{if(SH&&!document.activeElement?.closest('#ac-year'))$('#ac-year').innerHTML=''},150)}
+  if(e.target.id==='f-varietal'||e.target.id==='f-brand'){const f=e.target.id.slice(2);setTimeout(()=>{if(SH&&!document.activeElement?.closest('#ac-'+f))$('#ac-'+f).innerHTML=''},150)}
+  if(e.target.id==='f-pq'){const v=parseInt(e.target.value,10);e.target.value=isFinite(v)?Math.max(0,Math.min(9999,v)):0;updateSheet()}
+  if(e.target.id==='f-qty'){const min=SH.mode==='auditFind'?1:0;let q=parseInt(e.target.value,10);if(!isFinite(q))q=min;e.target.value=Math.max(min,Math.min(9999,q));updateSheet()}
+});
+$('#sheetRoot').addEventListener('focusin',e=>{if(SH&&e.target.id==='f-year')showYearAC()});
+$('#sheetRoot').addEventListener('keydown',e=>{if(e.target.id==='f-tag'&&e.key==='Enter'){e.preventDefault();addCustomTag()}});
+$('#sheetRoot').addEventListener('submit',e=>e.preventDefault());
+$('#sheetRoot').addEventListener('click',async e=>{
+  if(!SH)return;
+  if(e.target.id==='sheetBd'){if(!$('#scanRoot').innerHTML)closeSheet();return}
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.acpick){const f=t.dataset.acpick;$('#f-'+f).value=t.dataset.v;$('#ac-'+f).innerHTML='';if(f==='brand')renderQuick();updateSheet();$(f==='year'?'#f-brand':'#f-'+f).focus();return}
+  if(t.dataset.brandpick!=null){const b=$('#f-brand');b.value=keyOf(b.value)===keyOf(t.dataset.brandpick)?'':t.dataset.brandpick;renderQuick();updateSheet();return}
+  if(t.dataset.tagpick!=null){toggleTag(t.dataset.tagpick);return}
+  if(t.dataset.shpick!=null){const n=+t.dataset.shpick;SH.shelves=SH.shelves.includes(n)?SH.shelves.filter(x=>x!==n):[...SH.shelves,n].sort((a,b)=>a-b);renderShelfPick();return}
+  const a=t.dataset.sh;
+  if(a==='close')closeSheet();
+  else if(a==='qdec'||a==='qinc'){const el=$('#f-qty');const min=SH.mode==='auditFind'?1:0;el.value=Math.max(min,Math.min(9999,(parseInt(el.value,10)||0)+(a==='qinc'?1:-1)));updateSheet()}
+  else if(a==='pqdec'||a==='pqinc'){const el=$('#f-pq');el.value=Math.max(0,Math.min(9999,(parseInt(el.value,10)||0)+(a==='pqinc'?1:-1)));updateSheet()}
+  else if(a==='scanBc')openScanner({mode:'capture'});
+  else if(a==='addTag')addCustomTag();
+  else if(a==='remove'){
+    if(!SH.removeArmed){SH.removeArmed=true;updateSheet();return}
+    try{await A.deleteWine({id:SH.id});closeSheet();render()}catch(x){SH.err=x.message;updateSheet()}
+  }
+  else if(a==='save')saveSheet();
+});
+function toggleTag(t){
+  const k=keyOf(t);const i=SH.tags.findIndex(x=>keyOf(x)===k);
+  if(i>=0)SH.tags.splice(i,1);
+  else{if(SH.tags.length>=12){$('#tagNote').innerHTML='<div class="note bad">A wine can have at most 12 tags.</div>';return}SH.tags.push(t)}
+  $('#tagNote').innerHTML='';renderTags();
+}
+function addCustomTag(){
+  const inp=$('#f-tag');const v=inp.value.trim();const note=$('#tagNote');
+  if(!v){note.innerHTML='<div class="note bad">Type a tag first.</div>';return}
+  if(v.length>48){note.innerHTML='<div class="note bad">Tags can be at most 48 characters.</div>';return}
+  if(SH.tags.some(x=>keyOf(x)===keyOf(v))){note.innerHTML='<div class="note bad">That tag is already on this wine.</div>';return}
+  if(SH.tags.length>=12){note.innerHTML='<div class="note bad">A wine can have at most 12 tags.</div>';return}
+  const existing=[...PRESET_TAGS,...S.wines.flatMap(w=>w.tags||[])].find(x=>keyOf(x)===keyOf(v));
+  SH.tags.push(existing||v);inp.value='';note.innerHTML='';renderTags();
+}
+async function saveSheet(){
+  if(!SH||SH.saving)return;
+  const input=readForm();
+  if(Number.isNaN(input.priceCents)||(input.pending&&Number.isNaN(input.pending.priceCents))){SH.err='Price must be a number, like 24.99.';updateSheet();return}
+  if(input.pending&&!Number.isInteger(input.pending.quantity)){SH.err='Bottles on order must be a whole number.';updateSheet();return}
+  SH.saving=true;SH.err='';updateSheet();
+  try{
+    if(SH.mode==='add')await A.addWine(input);
+    else if(SH.mode==='edit')await A.updateWine({...input,id:SH.id});
+    else await A.addFoundWineToAudit({...input,auditId:SH.auditId});
+    closeSheet();render();
+  }catch(x){if(SH){SH.saving=false;SH.err=x.message;updateSheet()}}
+}
+
+/* ============ Fridge setup ============ */
+const MAX_SHELVES=20,MAX_CAP=60;
+function openSetup({onboarding}){
+  if(SETUP)return;
+  SETUP={onboarding,shelves:SHELVES.map(s=>({min:s.min,max:s.max})),saving:false,err:'',returnFocus:document.activeElement};
+  renderSetup();
+}
+function closeSetup(){if(!SETUP)return;const rf=SETUP.returnFocus;SETUP=null;$('#setupRoot').innerHTML='';try{rf?.focus()}catch(e){}}
+const setupOrphans=count=>S.wines.filter(w=>shelvesOf(w).some(n=>n!==OUT&&n>count));
+function renderSetup(){
+  if(!SETUP)return;
+  const sh=SETUP.shelves,n=sh.length;
+  const orphans=setupOrphans(n);
+  const total=sh.reduce((a,x)=>a+x.max,0);
+  const step=(attrs,val,lo,hi,label)=>`<div class="qstep su-step" role="group" aria-label="${label}"><button type="button" ${attrs} data-d="-1" ${val<=lo?'disabled':''} aria-label="Fewer">${icon('minus',16)}</button><span class="num su-val">${val}</span><button type="button" ${attrs} data-d="1" ${val>=hi?'disabled':''} aria-label="More">${icon('plus',16)}</button></div>`;
+  const scroll=$('#setupRoot .sheet')?.scrollTop||0;
+  $('#setupRoot').innerHTML=`<div class="bd" id="setupBd"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="suT" style="max-width:520px">
+    <div class="sh-h"><div><h2 id="suT">${SETUP.onboarding?'Welcome to Pour Decisions':'Fridge setup'}</h2>${SETUP.onboarding?'<p>Your cellar is saved on this phone. You can change this later from the menu.</p>':''}</div>${SETUP.onboarding?'':`<button class="close" data-su="close" aria-label="Close">${icon('x',18)}</button>`}</div>
+    <div class="su-row su-main"><span>Shelves<small>Shelf 1 is the top</small></span>${step('data-sucount="1"',n,1,MAX_SHELVES,'Number of shelves')}</div>
+    <div class="su-head"><span class="label">Bottles per shelf</span><span class="dim num" style="font-size:12px">${total} total</span></div>
+    ${sh.map((x,i)=>`<div class="su-row"><span>Shelf ${i+1}${x.min!==x.max?`<small>${x.min}–${x.max} now</small>`:''}</span>${step(`data-sucap="${i}"`,x.max,1,MAX_CAP,`Bottles on shelf ${i+1}`)}</div>`).join('')}
+    ${orphans.length?`<p class="warn" style="color:var(--danger)">${orphans.length} ${orphans.length===1?'wine is':'wines are'} on shelves you're removing and will need a new shelf.</p>`:''}
+    ${SETUP.err?`<p class="err" role="alert">${esc(SETUP.err)}</p>`:''}
+    <div class="foot">${SETUP.onboarding?'<button class="textbtn" data-su="skip">Skip for now</button>':''}<div class="r"><button class="save" data-su="save" ${SETUP.saving?'disabled':''}>${SETUP.saving?'Saving…':'Save'}</button></div></div>
+  </div></div>`;
+  const shEl=$('#setupRoot .sheet');if(shEl)shEl.scrollTop=scroll;
+}
+async function saveSetup(){
+  if(!SETUP||SETUP.saving)return;
+  SETUP.saving=true;SETUP.err='';renderSetup();
+  const n=SETUP.shelves.length;
+  try{
+    await put('settings',{id:'fridge',shelves:SETUP.shelves.map(x=>({min:x.min,max:x.max})),updatedAt:Date.now()});
+    for(const w of setupOrphans(n))await put('wines',{...w,shelves:shelvesOf(w).filter(v=>v===OUT||v<=n),updatedAt:Date.now()});
+    closeSetup();render();
+  }catch(x){if(SETUP){SETUP.saving=false;SETUP.err=`Couldn't save. ${x.message||'Try again.'}`;renderSetup()}}
+}
+$('#setupRoot').addEventListener('click',e=>{
+  if(!SETUP)return;
+  if(e.target.id==='setupBd'){if(!SETUP.onboarding)closeSetup();return}
+  const t=e.target.closest('button');if(!t)return;
+  const d=+t.dataset.d;
+  if(t.dataset.sucount){
+    const sh=SETUP.shelves;
+    if(d>0&&sh.length<MAX_SHELVES){const last=sh[sh.length-1]?.max||8;sh.push({min:last,max:last})}
+    if(d<0&&sh.length>1)sh.pop();
+    renderSetup();return;
+  }
+  if(t.dataset.sucap!=null){
+    const x=SETUP.shelves[+t.dataset.sucap];const v=Math.max(1,Math.min(MAX_CAP,x.max+d));x.max=v;x.min=v;renderSetup();return;
+  }
+  const a=t.dataset.su;
+  if(a==='close')closeSetup();
+  else if(a==='skip'){SETUP_SKIPPED=true;SETUP.shelves=DEFAULT_SHELVES.map(s=>({min:s.min,max:s.max}));saveSetup()}
+  else if(a==='save')saveSetup();
+});
+
+/* ============ Arrange shelves sheet ============ */
+function openArrange(){
+  const needs=S.wines.some(w=>w.quantity>0&&!shelvesOf(w).length);
+  ARR={tab:needs?'needs':'all',touched:new Set(),busy:new Set(),err:'',returnFocus:document.activeElement,built:false};
+  renderArrange();
+}
+function closeArrange(){if(!ARR)return;const rf=ARR.returnFocus;ARR=null;$('#arrRoot').innerHTML='';try{rf?.focus()}catch(e){}}
+function renderArrange(){
+  if(!ARR)return;
+  const st=S.wines.filter(w=>w.quantity>0);
+  const needN=st.filter(w=>!shelvesOf(w).length).length;
+  const list=st.filter(w=>ARR.tab==='all'||!shelvesOf(w).length||ARR.touched.has(w.id))
+    .sort((a,b)=>lc(a.brand,b.brand)||lc(a.varietal,b.varietal)||(b.year??0)-(a.year??0));
+  const fs=shelfStats();
+  const rows=list.map(w=>`<div class="arr-row"><div style="min-width:0"><div class="nm">${esc(yearTxt(w.year))} ${esc(nameOf(w))}</div><div class="sub">${esc([w.brand?w.varietal:'',w.notes].filter(Boolean).join(' · '))} · ${w.quantity} ${w.quantity===1?'bottle':'bottles'}</div></div>
+    <div class="shelfpick" role="group" aria-label="Shelves for ${esc(nameOf(w))}">${SHELVES.map(s=>`<button type="button" class="sp num" data-arr="${w.id}" data-n="${s.n}" aria-pressed="${shelvesOf(w).includes(s.n)}" aria-label="Shelf ${s.n}" ${ARR.busy.has(w.id)?'disabled':''}>${s.n}</button>`).join('')}<button type="button" class="sp outbtn" data-arr="${w.id}" data-n="${OUT}" aria-pressed="${shelvesOf(w).includes(OUT)}" ${ARR.busy.has(w.id)?'disabled':''}>Outside</button></div></div>`).join('');
+  const scroll=$('#arrRoot .sheet')?.scrollTop||0;
+  $('#arrRoot').innerHTML=`<div class="bd" id="arrBd"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="arrT" style="max-width:680px">
+    <div class="sh-h"><div><h2 id="arrT">Arrange shelves</h2><p>Tap a number to put a wine on that shelf. If it's split, tap both. Changes save as you go.</p></div><button class="close" data-arrc="close" aria-label="Close">${icon('x',18)}</button></div>
+    <div class="chips" style="margin-bottom:10px">${fs.rows.map(r=>`<span class="chip num" style="cursor:default">Shelf ${r.n} · ${r.solo}${r.shared?`+${r.shared}`:''}/${capTxt(r)}</span>`).join('')}</div>
+    <div class="arr-tabs tabs" role="tablist"><button role="tab" data-arrtab="needs" aria-selected="${ARR.tab==='needs'}">Needs a shelf (${needN})</button><button role="tab" data-arrtab="all" aria-selected="${ARR.tab==='all'}">All in stock (${st.length})</button></div>
+    ${ARR.err?`<p class="err" role="alert">${esc(ARR.err)}</p>`:''}
+    <div id="arrList">${rows||`<div class="empty"><h2>Every wine has a shelf</h2><p>Switch to All in stock to move something.</p></div>`}</div>
+    <div class="foot"><div class="r"><button class="save" data-arrc="close">Done</button></div></div></div></div>`;
+  const sh=$('#arrRoot .sheet');if(sh)sh.scrollTop=scroll;
+}
+$('#arrRoot').addEventListener('click',async e=>{
+  if(!ARR)return;
+  if(e.target.id==='arrBd'){closeArrange();return}
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.arrc==='close'){closeArrange();return}
+  if(t.dataset.arrtab){ARR.tab=t.dataset.arrtab;renderArrange();return}
+  if(t.dataset.arr){
+    const id=+t.dataset.arr,n=+t.dataset.n;const w=S.wines.find(x=>x.id===id);if(!w||ARR.busy.has(id))return;
+    const cur=shelvesOf(w);const next=cur.includes(n)?cur.filter(x=>x!==n):[...cur,n];
+    ARR.touched.add(id);ARR.busy.add(id);ARR.err='';
+    const focusKey=`[data-arr="${id}"][data-n="${n}"]`;
+    try{await A.setShelves({id,shelves:next})}catch(x){ARR.err=`Couldn't save ${nameOf(w)}: ${x.message}`}
+    if(!ARR)return;ARR.busy.delete(id);render();$('#arrRoot '+focusKey)?.focus();
+  }
+});
+
+/* ============ Barcode scanner ============ */
+let SC=null;
+const ZX=window.ZXing;
+let zxReader=null;
+function getReader(){
+  if(!ZX)return null;
+  if(!zxReader){
+    const hints=new Map();
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS,[ZX.BarcodeFormat.EAN_13,ZX.BarcodeFormat.EAN_8,ZX.BarcodeFormat.UPC_A,ZX.BarcodeFormat.UPC_E]);
+    hints.set(ZX.DecodeHintType.TRY_HARDER,true);
+    zxReader=new ZX.MultiFormatReader();zxReader.setHints(hints);
+  }
+  return zxReader;
+}
+function decodeCanvas(cv){
+  const r=getReader();if(!r)return null;
+  try{const src=new ZX.HTMLCanvasElementLuminanceSource(cv);const res=r.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(src)));return res.getText()}
+  catch(e){return null}finally{r.reset()}
+}
+function openScanner(opts){
+  SC={mode:opts.mode,phase:'scan',camOk:null,camMsg:'',manual:'',stream:null,timer:null,cooling:false,candidates:[],selected:null,pending:false,result:null,barcode:''};
+  renderScanner();startCam();
+}
+function closeScanner(){
+  if(!SC)return;stopCam();SC=null;$('#scanRoot').innerHTML='';
+}
+function stopCam(){if(!SC)return;clearTimeout(SC.timer);SC.stream?.getTracks().forEach(t=>t.stop());SC.stream=null}
+async function startCam(){
+  if(!navigator.mediaDevices?.getUserMedia){SC.camOk=false;SC.camMsg='';renderScanner();return}
+  try{
+    // Some app views never answer the camera request, so give up after 4 seconds and offer the photo option.
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});
+    try{const tr=stream.getVideoTracks()[0];const cap=tr.getCapabilities?.();if(cap&&cap.zoom){await tr.applyConstraints({advanced:[{zoom:Math.min(2,cap.zoom.max)}]})}}catch(e){}
+    if(!SC){stream.getTracks().forEach(t=>t.stop());return}
+    SC.stream=stream;SC.camOk=true;renderScanner();
+    const v=$('#scanVid');v.srcObject=stream;await v.play().catch(()=>{});
+    loop();
+  }catch(e){if(!SC)return;SC.camOk=false;SC.camMsg='';renderScanner()}
+}
+const cv=document.createElement('canvas');
+function loop(){
+  if(!SC||!SC.stream||SC.phase!=='scan')return;
+  const v=$('#scanVid');
+  if(v&&v.videoWidth&&!SC.cooling){
+    // crop to the guide band for faster 1-D decoding
+    const w=v.videoWidth,h=v.videoHeight,ch=Math.round(h*.4);
+    cv.width=w;cv.height=ch;cv.getContext('2d',{willReadFrequently:true}).drawImage(v,0,(h-ch)/2,w,ch,0,0,w,ch);
+    const t=decodeCanvas(cv);
+    if(t){gotCode(t);SC.cooling=true;setTimeout(()=>{if(SC)SC.cooling=false},900)}
+  }
+  SC.timer=setTimeout(loop,180);
+}
+const onPhoto=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f||!SC)return;
+  SC.camMsg='Reading photo…';renderScanner();
+  try{
+    const bmp=await createImageBitmap(f);
+    const found=await decodePhoto(bmp);
+    if(!SC)return;
+    if(found){SC.camMsg='';gotCode(found)}
+    else{SC.camMsg='No barcode found. Try again.';renderScanner()}
+  }catch(x){if(SC){SC.camMsg='Couldn’t read that photo. Try again.';renderScanner()}}
+};
+$('#photoIn').addEventListener('change',onPhoto);
+$('#libIn').addEventListener('change',onPhoto);
+async function decodePhoto(bmp){
+  // 1) The phone's built-in barcode reader, where the browser offers one.
+  if('BarcodeDetector' in window){
+    try{
+      const det=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
+      const r=await det.detect(bmp);if(r&&r[0]&&r[0].rawValue)return r[0].rawValue;
+    }catch(e){}
+  }
+  if(!ZX)return null;
+  // 2) ZXing across sizes, both orientations, whole photo and the middle of it.
+  const crops=[[0,0,1,1],[.2,.2,.6,.6],[.1,.3,.8,.4]];
+  for(const y of[0,.25,.5])for(const x of[0,.25,.5])crops.push([x,y,.5,.5]);
+  for(const max of[1000,1600]){
+    for(const [cx,cy,cw,ch] of crops){
+      const sx=bmp.width*cx,sy=bmp.height*cy,sw=bmp.width*cw,sh=bmp.height*ch;
+      const sc=Math.min(1,max/Math.max(sw,sh));const W=Math.round(sw*sc),H=Math.round(sh*sc);
+      for(const rot of[0,90]){
+        if(rot){cv.width=H;cv.height=W}else{cv.width=W;cv.height=H}
+        const ctx=cv.getContext('2d',{willReadFrequently:true});ctx.save();
+        if(rot){ctx.translate(H,0);ctx.rotate(Math.PI/2)}
+        ctx.drawImage(bmp,sx,sy,sw,sh,0,0,W,H);ctx.restore();
+        const t=decodeCanvas(cv);if(t)return t;
+        await new Promise(r=>setTimeout(r,0));
+      }
+    }
+  }
+  return null;
+}
+async function gotCode(raw){
+  if(!SC)return;
+  const code=digits(raw);
+  if(code.length<6)return;
+  if(SC.mode==='capture'){
+    closeScanner();
+    if(SH){$('#f-barcode').value=code;SH.bcNote=`Barcode ${code} captured.`;updateSheet()}
+    return;
+  }
+  stopCam();SC.barcode=code;SC.pending=true;renderScanner();
+  let res;try{res=await A.drinkByBarcode({barcode:code,wineId:null})}catch(x){res={status:'error',message:x.message,candidates:[]}}
+  if(!SC)return;SC.pending=false;
+  if(res.status==='needs_verification'){SC.phase='verify';SC.candidates=res.candidates;SC.selected=null}
+  else{SC.phase='done';SC.result=res;if(res.status==='out_of_stock')SC.candidates=res.candidates}
+  renderScanner();render();
+}
+function renderScanner(){
+  if(!SC)return;
+  const drink=SC.mode==='drink';
+  let body='';
+  if(SC.phase==='scan'){
+    const md=digits(SC.manual);const okLen=md.length>=6&&md.length<=18;
+    body=`<div class="cam">${SC.camOk?`<video id="scanVid" playsinline muted></video><div class="guide"><div class="laser"></div></div><div class="cap">Hold steady — scanning happens automatically.</div>`
+      :`<div class="fallback">${SC.camOk===null?'<span>Starting camera…</span>':`${SC.camMsg?`<span>${esc(SC.camMsg)}</span>`:''}<button class="photo-btn" data-sc="photo">${icon('camera',18)}Take photo</button><span style="font-size:12px;opacity:.85">Use 2× zoom for best results</span>`}</div>`}</div>
+      ${SC.camOk&&SC.camMsg?`<p class="note bad">${esc(SC.camMsg)}</p>`:''}
+      ${SC.pending?'<p class="note" style="color:var(--dim)">Looking up…</p>':''}
+      <form class="manual" id="manualF"><label for="manualIn">Barcode number</label><div class="bcrow"><input class="in num" id="manualIn" inputmode="numeric" maxlength="18" autocomplete="off" value="${esc(SC.manual)}"><button class="gbtn" id="manualGo" ${okLen&&!SC.pending?'':'disabled'}>${drink?'Find wine':'Use code'}</button></div>
+      <div id="manualNote">${SC.manual&&!okLen?'<span class="note bad">Enter 6–18 digits.</span>':''}</div></form>`;
+  }else if(SC.phase==='verify'){
+    body=`<div class="ver" role="radiogroup" aria-labelledby="verT">${icon('barcode',20)}<h3 id="verT">Confirm the vintage</h3><p>Barcode ${esc(SC.barcode)} matches ${SC.candidates.length} records. Choose the bottle you opened.</p>
+      <div class="cands">${SC.candidates.map(c=>`<button class="cand" role="radio" data-cand="${c.id}" aria-checked="${SC.selected===c.id}" ${c.quantity<=0||SC.pending?'disabled':''}><span class="disc num">${yearTxt(c.year)}</span><span style="min-width:0"><b>${esc(c.brand||c.varietal)}</b>${c.brand?`<small>${esc(c.varietal)}</small>`:''}${shelvesOf(c).length?`<small>${esc(shelfTxt(c))}</small>`:''}</span><span class="st num">${c.quantity>0?`${c.quantity} ${c.quantity===1?'bottle':'bottles'}`:'Out'}</span></button>`).join('')}</div>
+      <p class="warn">Only the selected record will be reduced by one bottle.</p>
+      ${SC.err?`<p class="err">${esc(SC.err)}</p>`:''}
+      <div class="ver-a"><button class="btn sec" data-sc="close">Cancel</button><button class="btn pri" data-sc="confirm" ${SC.selected==null||SC.pending?'disabled':''}>${SC.pending?'Updating…':'Confirm &amp; drink one'}</button></div></div>`;
+  }else{
+    const r=SC.result;const ok=r.status==='drank';
+    body=`<div class="outcome" role="status"><span class="ic ${ok?'ok':'bad'}">${icon(ok?'okc':'alert',42)}</span><h3>${ok?'Inventory updated':'Not completed'}</h3><p>${esc(r.message)}</p>
+      ${!ok&&SC.candidates.length?`<div class="cands" style="width:100%;text-align:left">${SC.candidates.map(c=>`<div class="cand" style="opacity:.7"><span class="disc num">${yearTxt(c.year)}</span><span><b>${esc(c.brand||c.varietal)}</b></span><span class="st">Out</span></div>`).join('')}</div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${r.status==='not_found'?`<button class="btn sec" data-sc="addNew">Add as new wine</button>`:''}<button class="btn pri" data-sc="close">Done</button></div></div>`;
+  }
+  $('#scanRoot').innerHTML=`<div class="bd scan" id="scanBd"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="scT"><div class="sh-h"><h2 id="scT">${drink?'Scan to drink':'Scan bottle barcode'}</h2><button class="close" data-sc="close" aria-label="Close scanner">${icon('x',18)}</button></div>${body}</div></div>`;
+  if(SC.phase==='scan'&&SC.stream){const v=$('#scanVid');if(v){v.srcObject=SC.stream;v.play().catch(()=>{})}}
+}
+$('#scanRoot').addEventListener('input',e=>{
+  if(e.target.id!=='manualIn'||!SC)return;
+  const d=digits(e.target.value);if(d!==e.target.value)e.target.value=d;SC.manual=d;
+  const ok=d.length>=6&&d.length<=18;$('#manualGo').disabled=!ok||SC.pending;
+  $('#manualNote').innerHTML=d&&!ok?'<span class="note bad">Enter 6–18 digits.</span>':'';
+});
+$('#scanRoot').addEventListener('submit',e=>{e.preventDefault();if(!SC)return;const d=digits(SC.manual);if(d.length>=6)gotCode(d)});
+$('#scanRoot').addEventListener('click',async e=>{
+  if(!SC)return;
+  if(e.target.id==='scanBd'){closeScanner();return}
+  const t=e.target.closest('button');if(!t)return;
+  if(t.dataset.cand){SC.selected=+t.dataset.cand;SC.err='';renderScanner();return}
+  const a=t.dataset.sc;
+  if(a==='close')closeScanner();
+  else if(a==='photo')$('#photoIn').click();
+  else if(a==='library')$('#libIn').click();
+  else if(a==='addNew'){const bc=SC.barcode;closeScanner();openSheet({mode:'add',barcode:bc})}
+  else if(a==='confirm'&&SC.selected!=null){
+    SC.pending=true;renderScanner();
+    let res;try{res=await A.drinkByBarcode({barcode:SC.barcode,wineId:SC.selected})}catch(x){res={status:'error',message:x.message,candidates:[]}}
+    if(!SC)return;SC.pending=false;SC.phase='done';SC.result=res;SC.candidates=res.status==='out_of_stock'?[]:[];renderScanner();render();
+  }
+});
+
+render();boot();
+</script>
+
+<script>
+if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+</script>
+</body>
+</html>
